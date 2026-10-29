@@ -26,7 +26,43 @@ small{display:block;color:#00b32c;opacity:.7;margin-top:6px;font-size:11px}
 .dots i:nth-child(2){animation-delay:.15s}
 .dots i:nth-child(3){animation-delay:.3s}
 @keyframes b{0%,80%,100%{opacity:.2}40%{opacity:1}}
-#bar{display:flex;gap:8px;padding:10px;background:#000;borderfunction setStatus(t){ $("st").textContent = t; }
+#bar{display:flex;gap:8px;padding:10px;background:#000;border-top:1px solid #0a4d1a}
+#t{flex:1;min-width:0;padding:12px;border-radius:20px;border:1px solid #0a4d1a;background:#000;color:#00ff41;font-size:16px;font-family:monospace}
+#t::placeholder{color:#0a7a22}
+button{border:0;border-radius:50%;width:46px;height:46px;font-size:20px;background:#00ff41;color:#000}
+button.on{background:#ff3b3b}
+.k{background:none;color:#00ff41;width:auto;height:auto;font-size:18px;border-radius:8px;padding:2px 4px}
+.k.on{background:#ff3b3b}
+</style></head><body>
+<header><b>🤖 Джарвис</b>
+<span><label><input type="checkbox" id="v" checked> голос</label>
+<button class="k" id="vc" title="Сменить голос">🎙</button>
+<button class="k" id="hf" title="Режим разговора">🎧</button>
+<button class="k" id="clr" title="Очистить чат">🗑</button>
+<button class="k" id="kb">🔑</button></span></header>
+<div id="st">Готов</div>
+<div id="chat"></div>
+<div id="bar">
+<input id="t" placeholder="Скажи или напиши...">
+<button id="mic">🎤</button>
+<button id="go">➤</button>
+</div>
+<script>
+window.addEventListener("error", e => {
+  const s = document.getElementById("st");
+  if(s) s.textContent = "⚠ " + e.message;
+});
+const $ = id => document.getElementById(id);
+const API = "https://generativelanguage.googleapis.com/v1beta/";
+const VARS = [{thinkingLevel:"minimal"}, {thinkingLevel:"low"}, {thinkingBudget:0}, null];
+const ld = (k, d) => { try{ const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; }catch(e){ return d; } };
+const sv = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+
+let key = localStorage.getItem("jkey") || "";
+let hist = ld("jhist", []);
+let facts = ld("jfacts", []);
+let good = ld("jgood", null);
+let models = null, busy = false, speaking = false, listening = false, hf = false;function setStatus(t){ $("st").textContent = t; }
 function idle(){ setStatus(hf ? "🎧 Жду, говори…" : "Готов"); }
 
 function add(cls, text){
@@ -477,6 +513,6 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, Майки. Я Джарвис v14." : "Приветствую, Майки. Я Джарвис v14. Нажми 🎤 или включи 🎧 и просто говори.");
+add("j", hist.length ? "С возвращением, Майки. Я Джарвис v15." : "Приветствую, Майки. Я Джарвис v15. Нажми 🎤 или включи 🎧 и просто говори.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
