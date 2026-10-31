@@ -17,19 +17,21 @@ header span{display:flex;align-items:center;gap:6px;font-size:13px}
 input[type=checkbox]{accent-color:#00ff41}
 #st{padding:4px 16px;background:#000;font-size:12px;color:#00b32c;border-bottom:1px solid #0a4d1a}
 #chat{flex:1;overflow-y:auto;padding:12px;background:#000}
-.m{max-width:85%;padding:10px 14px;margin:8px 0;border-radius:12px;border:1px solid #0a4d1a;white-space:pre-wrap;line-height:1.4;animation:p .2s}
+.m{max-width:85%;padding:10px 14px;margin:8px 0;border-radius:12px;border:1px solid #0a4d1a;white-space:pre-wrap;line-height:1.4;animation:p .2s;overflow-wrap:anywhere}
 @keyframes p{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .u{background:#031f09;border-color:#00ff41;margin-left:auto}
 .j{background:#000}
+.m img{display:block;max-width:100%;border-radius:8px;margin-top:6px}
+.m a{display:block;margin-top:8px;color:#00ff41;font-size:13px}
 small{display:block;color:#00b32c;opacity:.7;margin-top:6px;font-size:11px}
 .dots i{display:inline-block;width:8px;height:8px;margin:0 2px;border-radius:50%;background:#00ff41;animation:b 1s infinite}
 .dots i:nth-child(2){animation-delay:.15s}
 .dots i:nth-child(3){animation-delay:.3s}
 @keyframes b{0%,80%,100%{opacity:.2}40%{opacity:1}}
-#bar{display:flex;gap:8px;padding:10px;background:#000;border-top:1px solid #0a4d1a}
+#bar{display:flex;gap:6px;padding:10px;background:#000;border-top:1px solid #0a4d1a}
 #t{flex:1;min-width:0;padding:12px;border-radius:20px;border:1px solid #0a4d1a;background:#000;color:#00ff41;font-size:16px;font-family:monospace}
 #t::placeholder{color:#0a7a22}
-button{border:0;border-radius:50%;width:46px;height:46px;font-size:20px;background:#00ff41;color:#000}
+button{border:0;border-radius:50%;width:44px;height:44px;font-size:19px;background:#00ff41;color:#000}
 button.on{background:#ff3b3b}
 .k{background:none;color:#00ff41;width:auto;height:auto;font-size:18px;border-radius:8px;padding:2px 4px}
 .k.on{background:#ff3b3b}
@@ -44,6 +46,8 @@ button.on{background:#ff3b3b}
 <div id="chat"></div>
 <div id="bar">
 <input id="t" placeholder="Скажи или напиши...">
+<input type="file" id="file" accept="image/*" hidden>
+<button id="cam" title="Фото">📷</button>
 <button id="mic">🎤</button>
 <button id="go">➤</button>
 </div>
@@ -55,6 +59,7 @@ window.addEventListener("error", e => {
 const $ = id => document.getElementById(id);
 const API = "https://generativelanguage.googleapis.com/v1beta/";
 const VARS = [{thinkingLevel:"minimal"}, {thinkingLevel:"low"}, {thinkingBudget:0}, null];
+const VARS_MATH = [{thinkingLevel:"medium"}, {thinkingLevel:"low"}, {thinkingBudget:2048}, null];
 const ld = (k, d) => { try{ const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; }catch(e){ return d; } };
 const sv = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
 
@@ -62,7 +67,10 @@ let key = localStorage.getItem("jkey") || "";
 let hist = ld("jhist", []);
 let facts = ld("jfacts", []);
 let good = ld("jgood", null);
-let models = null, busy = false, speaking = false, listening = false, hf = false;function setStatus(t){ $("st").textContent = t; }
+let models = null, busy = false, speaking = false, listening = false, hf = false;
+let imgModel = null, imgTried = false, lastSrc = [], useStream = true;
+
+function setStatus(t){ $("st").textContent = t; }
 function idle(){ setStatus(hf ? "🎧 Жду, говори…" : "Готов"); }
 
 function add(cls, text){
@@ -72,16 +80,42 @@ function add(cls, text){
   $("chat").scrollTop = $("chat").scrollHeight;
   return d;
 }
+function b64blob(b64, mime){
+  const bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+  for(let i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+  return new Blob([u], {type: mime});
+}
+function addImg(mime, b64){
+  const d = add("j", "");
+  const url = URL.createObjectURL(b64blob(b64, mime));
+  const im = document.createElement("img");
+  im.src = url;
+  d.appendChild(im);
+  const a = document.createElement("a");
+  a.href = url; a.download = "jarvis.png"; a.textContent = "💾 Сохранить";
+  d.appendChild(a);
+  $("chat").scrollTop = $("chat").scrollHeight;
+  return d;
+}
 function askKey(){
   const k = prompt("Вставь ключ Gemini API:");
-  if(k){ key = k.trim(); localStorage.setItem("jkey", key); models = null; ttsTried = false; ttsModel = null; }
+  if(k){ key = k.trim(); localStorage.setItem("jkey", key); models = null; ttsTried = false; ttsModel = null; imgTried = false; imgModel = null; }
 }
 $("kb").onclick = askKey;
 
-function sys(){
+function sys(mode){
   const d = new Date().toLocaleString("ru-RU", {weekday:"long", day:"numeric", month:"long", hour:"2-digit", minute:"2-digit"});
-  return "Ты Джарвис, умный и учтивый голосовой ассистент. Пользователя зовут Майки (именно Майки, не Майка). Говори живо и естественно, как человек в разговоре: короткие фразы, 1-3 предложения, без списков, смайликов и markdown. Отвечай по-русски. Сейчас: " + d + "."
-    + (facts.length ? " Что ты знаешь о Майки: " + facts.join("; ") + "." : "");
+  let s = "Ты Джарвис, умный и учтивый голосовой ассистент. Пользователя зовут Майки (именно Майки, не Майка). ";
+  if(mode === "math"){
+    s += "Сейчас режим задач: реши аккуратно по шагам и проверь вычисления (если нужно, выполни код). Формулы пиши обычным текстом без LaTeX, используй × ÷ √ ^. В самом конце добавь отдельную строку «ИТОГ: …» с коротким ответом одним предложением. ";
+  }else if(mode === "search"){
+    s += "Используй поиск в интернете для свежих данных. Отвечай живо и коротко, 1-3 предложения, без списков и markdown. ";
+  }else{
+    s += "Говори живо и естественно, как человек в разговоре: короткие фразы, 1-3 предложения, без списков, смайликов и markdown. ";
+  }
+  s += "Отвечай по-русски. Сейчас: " + d + ".";
+  if(facts.length) s += " Что ты знаешь о Майки: " + facts.join("; ") + ".";
+  return s;
 }
 
 // ---------- голос ----------
@@ -277,7 +311,10 @@ async function spRun(){
 
 function speak(text, cb){ spStart(); spFeed(text, true); spEnd(cb); }
 function finish(){ busy = false; idle(); if(hf) setTimeout(listen, 300); }
-const say = t => speak(t, finish);const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const say = t => speak(t, finish);
+
+// ---------- микрофон ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 function listen(){ if(!rec || listening || speaking || busy) return; try{ rec.start(); }catch(e){} }
 if(SR){
@@ -312,7 +349,24 @@ if(SR){
   $("hf").style.display = "none";
 }
 
-// ---------- память и быстрые команды ----------
+// ---------- быстрые команды, память, калькулятор ----------
+function calc(t){
+  if(t.length > 60) return null;
+  if(!(/(сколько будет|посчитай|вычисли|реши|=|\?)/i.test(t) || /[+*\/×÷^]|плюс|минус|умножить|разделить|поделить/i.test(t))) return null;
+  let s = t.toLowerCase()
+    .replace(/сколько будет|посчитай|вычисли|реши|равно|=|\?/g, " ")
+    .replace(/плюс/g, "+").replace(/минус/g, "-")
+    .replace(/умножить на|помножить на/g, "*").replace(/разделить на|поделить на/g, "/")
+    .replace(/[×хx]/g, "*").replace(/÷/g, "/").replace(/\^/g, "**")
+    .replace(/,/g, ".").replace(/\s+/g, "");
+  if(!/^[0-9+\-*\/().]+$/.test(s) || !/[+\-*\/]/.test(s) || !/[0-9]/.test(s)) return null;
+  try{
+    const v = Function('"use strict";return (' + s + ')')();
+    if(typeof v !== "number" || !isFinite(v)) return null;
+    return String(Math.round(v * 1e10) / 1e10);
+  }catch(e){ return null; }
+}
+
 function local(t){
   const s = t.toLowerCase().replace(/[!?.,]/g, " ").replace(/\s+/g, " ").trim();
   const now = new Date();
@@ -332,10 +386,30 @@ function local(t){
     return "Сейчас " + now.toLocaleTimeString("ru-RU", {hour:"2-digit", minute:"2-digit"});
   if(/(какое число|какая дата|какой сегодня день)/.test(s))
     return "Сегодня " + now.toLocaleDateString("ru-RU", {weekday:"long", day:"numeric", month:"long"});
+  const c = calc(t);
+  if(c !== null) return "Будет " + c;
   return null;
 }
 
-$("clr").onclick = () => { hist = []; sv("jhist", hist); $("chat").innerHTML = ""; add("j", "Чат очищен. Факты о тебе я сохранил."); };// ---------- нейросеть ----------
+const IMG_RE = /(нарису[йе]|нарисовать|сгенерируй (мне )?(картинк|изображени|фото|рисунок)|создай (мне )?(картинк|изображени|рисунок)|сделай (мне )?(картинк|рисунок)|покажи (мне )?картинку)/i;
+const SEARCH_RE = /(новост|погод|курс (доллар|евро|валют|биткоин|рубл)|что нового|последни[еяй]|в интернете|поищи|загугли|результат[ыа]? матч|сколько стоит|какая цена)/i;
+const MATH_RE = /(реши|решить|посчитай|подсчитай|вычисли|сколько будет|задач|уравнени|интеграл|производн|корень из|процент|дроб|площад|периметр|теорем|докажи|\d\s*[+*\/×÷^]\s*\d)/i;
+function detectMode(t){
+  if(IMG_RE.test(t)) return "image";
+  if(SEARCH_RE.test(t)) return "search";
+  if(MATH_RE.test(t)) return "math";
+  return "chat";
+}
+function finalSpeech(ans){
+  const m = /ИТОГ:\s*([\s\S]+?)\s*$/i.exec(ans);
+  if(m) return "Ответ: " + m[1].replace(/\s+/g, " ").slice(0, 300);
+  const lines = ans.split("\n").map(x => x.trim()).filter(Boolean);
+  return (lines[lines.length - 1] || ans).slice(0, 300);
+}
+
+$("clr").onclick = () => { hist = []; sv("jhist", hist); $("chat").innerHTML = ""; add("j", "Чат очищен. Факты о тебе я сохранил."); };
+
+// ---------- сеть ----------
 async function call(url, opt, ms){
   const c = new AbortController();
   const timer = setTimeout(() => c.abort(), ms);
@@ -364,37 +438,57 @@ async function getModels(){
   return models;
 }
 
-function makeBody(variant){
-  const c = hist.slice(-10);
+function makeBody(variant, o){
+  const c = hist.slice(-10).map(x => x);
   while(c.length && c[0].role !== "user") c.shift();
+  if(c.length){
+    const last = c[c.length - 1];
+    const parts = [];
+    if(o.img) parts.push({inlineData: {mimeType: o.img.mime, data: o.img.data}});
+    parts.push({text: o.prompt});
+    c[c.length - 1] = {role: last.role, parts};
+  }
   const body = {
-    systemInstruction: {parts:[{text: sys()}]},
+    systemInstruction: {parts: [{text: sys(o.mode)}]},
     contents: c,
-    generationConfig: {maxOutputTokens: 400}
+    generationConfig: {maxOutputTokens: o.mode === "math" ? 1800 : 400}
   };
   if(variant) body.generationConfig.thinkingConfig = variant;
+  if(o.tools) body.tools = o.mode === "math" ? [{code_execution: {}}] : [{google_search: {}}];
   return body;
 }
 
-async function ask(m, variant){
+function textOf(d){
+  const ps = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+  return ps.filter(p => p.text && !p.thought).map(p => p.text).join("");
+}
+function srcOf(d){
+  const g = d.candidates && d.candidates[0] && d.candidates[0].groundingMetadata;
+  (g && g.groundingChunks || []).forEach(c => {
+    if(c.web && !lastSrc.some(x => x.uri === c.web.uri)) lastSrc.push({title: c.web.title || c.web.uri, uri: c.web.uri});
+  });
+}
+
+async function ask(m, variant, o){
   const d = await call(API + m + ":generateContent?key=" + key, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify(makeBody(variant))
-  }, 12000);
-  const parts = (d.candidates && d.candidates[0] && d.candidates[0].content
-                 && d.candidates[0].content.parts) || [];
-  return parts.filter(p => !p.thought).map(p => p.text || "").join("");
+    body: JSON.stringify(makeBody(variant, o))
+  }, o.mode === "math" ? 40000 : 15000);
+  lastSrc = []; srcOf(d);
+  return textOf(d);
 }
 
-async function askStream(m, variant, onText){
+async function askStream(m, variant, o, onText){
+  const ms = o.mode === "math" ? 40000 : 15000;
   const ctrl = new AbortController();
-  let timer = setTimeout(() => ctrl.abort(), 12000);
+  let timer = setTimeout(() => ctrl.abort(), ms);
+  lastSrc = [];
   try{
     const r = await fetch(API + m + ":streamGenerateContent?alt=sse&key=" + key, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(makeBody(variant)),
+      body: JSON.stringify(makeBody(variant, o)),
       signal: ctrl.signal
     });
     if(!r.ok){
@@ -408,7 +502,7 @@ async function askStream(m, variant, onText){
       const {done, value} = await rd.read();
       if(done) break;
       clearTimeout(timer);
-      timer = setTimeout(() => ctrl.abort(), 12000);
+      timer = setTimeout(() => ctrl.abort(), ms);
       buf += dec.decode(value, {stream: true});
       const lines = buf.split("\n");
       buf = lines.pop();
@@ -416,78 +510,193 @@ async function askStream(m, variant, onText){
         if(!ln.startsWith("data:")) continue;
         try{
           const d = JSON.parse(ln.slice(5));
-          const ps = (d.candidates && d.candidates[0] && d.candidates[0].content
-                      && d.candidates[0].content.parts) || [];
-          for(const p of ps){
-            if(p.text && !p.thought){ full += p.text; onText(full); }
-          }
+          srcOf(d);
+          const t = textOf(d);
+          if(t){ full += t; onText(full); }
         }catch(e){}
       }
     }
     return full;
   }catch(e){
-    if(e.name === "AbortError") throw new Error("нет ответа за 12с");
+    if(e.name === "AbortError") throw new Error("нет ответа за " + (ms / 1000) + "с");
     throw e;
   }finally{ clearTimeout(timer); }
-}let useStream = true;
+}
 
-async function send(text){
-  text = text.trim();
-  if(!text || busy) return;
+async function runAsk(m, vars, o, onText, log, name){
+  for(let i = o.start || 0; i < vars.length; i++){
+    try{
+      spStart();
+      const ans = useStream ? await askStream(m, vars[i], o, onText) : await ask(m, vars[i], o);
+      if(!ans) throw new Error("пустой ответ");
+      return {ans, vi: i};
+    }catch(e){
+      log.push(name + (o.tools ? "+tools" : "") + " [" + i + "]: " + e.message.slice(0, 70));
+      if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
+      if(useStream && /Failed to fetch|getReader|reader|stream/i.test(e.message)){ useStream = false; i--; continue; }
+      if(/invalid argument|thinking|budget|level/i.test(e.message)) continue;
+      throw e;
+    }
+  }
+  throw new Error("варианты размышления не подошли");
+}
+
+// ---------- картинки ----------
+async function findImgModel(){
+  if(imgModel || imgTried || !key) return imgModel;
+  imgTried = true;
+  try{
+    const d = await call(API + "models?pageSize=100&key=" + key, {}, 8000);
+    const l = (d.models || [])
+      .filter(m => (m.supportedGenerationMethods || []).includes("generateContent") && /image/.test(m.name) && !/imagen/.test(m.name))
+      .map(m => m.name);
+    imgModel = l.find(n => /flash/.test(n)) || l[0] || null;
+  }catch(e){}
+  return imgModel;
+}
+
+async function genImage(prompt){
+  const m = await findImgModel();
+  if(!m) throw new Error("для твоего ключа нет модели рисования");
+  let lastErr = null;
+  for(const mod of [["TEXT", "IMAGE"], ["IMAGE"]]){
+    try{
+      const d = await call(API + m + ":generateContent?key=" + key, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({contents: [{role: "user", parts: [{text: prompt}]}], generationConfig: {responseModalities: mod}})
+      }, 60000);
+      const ps = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+      const im = ps.find(p => p.inlineData && /^image\//.test(p.inlineData.mimeType || ""));
+      if(im) return im.inlineData;
+      const t = ps.map(p => p.text || "").join(" ").trim();
+      throw new Error(t ? t.slice(0, 150) : "модель не вернула картинку");
+    }catch(e){
+      lastErr = e;
+      if(!/invalid argument|modalit/i.test(e.message)) break;
+    }
+  }
+  throw lastErr || new Error("не получилось");
+}
+
+async function doImage(text){
+  const box = add("j", "");
+  box.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+  setStatus("🎨 Рисую…");
+  try{
+    const im = await genImage(text);
+    box.remove();
+    addImg(im.mimeType, im.data);
+    hist.push({role: "user", parts: [{text: "[просьба нарисовать] " + text}]});
+    hist.push({role: "model", parts: [{text: "Нарисовал картинку."}]});
+    hist = hist.slice(-30); sv("jhist", hist);
+    say("Готово. Смотри, что получилось.");
+  }catch(e){
+    box.textContent = "Ошибка рисования: " + e.message;
+    finish();
+  }
+}
+
+// ---------- фото ----------
+function shrink(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(im.width, im.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+      const du = c.toDataURL("image/jpeg", 0.82);
+      URL.revokeObjectURL(url);
+      res({mime: "image/jpeg", data: du.split(",")[1], url: du});
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error("не удалось открыть фото")); };
+    im.src = url;
+  });
+}
+$("cam").onclick = () => $("file").click();
+$("file").onchange = async e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if(!f || busy) return;
+  try{
+    const photo = await shrink(f);
+    send($("t").value, photo);
+  }catch(err){ add("j", "Фото: " + err.message); }
+};
+
+// ---------- главная функция ----------
+async function send(text, photo){
+  text = (text || "").trim();
+  if(busy || (!text && !photo)) return;
   busy = true;
-  add("u", text);
+  const ub = add("u", text || "📷 Фото");
+  if(photo){
+    const im = document.createElement("img");
+    im.src = photo.url;
+    ub.appendChild(im);
+  }
   $("t").value = "";
 
-  const quick = local(text);
-  if(quick){ add("j", quick); say(quick); return; }
+  if(!photo){
+    const quick = local(text);
+    if(quick){ add("j", quick); say(quick); return; }
+  }
 
   if(!key) askKey();
   if(!key){ add("j", "Нужен ключ: нажми 🔑"); finish(); return; }
 
-  hist.push({role:"user", parts:[{text}]});
+  let mode = detectMode(text);
+  if(photo) mode = (!text || mode === "math") ? "math" : "chat";
+  else if(mode === "image"){ await doImage(text); return; }
+
+  const prompt = (photo && !text)
+    ? "Посмотри на фото. Если там задача или пример — реши по шагам. Иначе коротко опиши, что на фото."
+    : text;
+  hist.push({role: "user", parts: [{text: photo ? "[фото] " + (text || "что на фото?") : text}]});
+
   const box = add("j", "");
   box.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
-  setStatus("💭 Думаю…");
+  setStatus(mode === "math" ? "🧮 Решаю…" : mode === "search" ? "🔎 Ищу…" : photo ? "📷 Смотрю…" : "💭 Думаю…");
   const log = [];
+  const vars = mode === "math" ? VARS_MATH : VARS;
+  const wantTools = mode === "math" || mode === "search";
   try{
     let list = await getModels();
     if(good && list.includes(good.m)) list = [good.m, ...list.filter(x => x !== good.m)];
     for(const m of list){
       const name = m.replace("models/", "");
-      const start = (good && good.m === m) ? good.v : 0;
-      for(let vi2 = start; vi2 < VARS.length; vi2++){
+      for(const tools of (wantTools ? [true, false] : [false])){
         const t0 = Date.now();
         try{
-          spStart();
           let first = true;
-          const ans = useStream
-            ? await askStream(m, VARS[vi2], t => {
-                if(first){ first = false; setStatus("✍️ Отвечаю…"); }
-                box.textContent = t;
-                spFeed(t, false);
-                $("chat").scrollTop = $("chat").scrollHeight;
-              })
-            : await ask(m, VARS[vi2]);
-          if(!ans) throw new Error("пустой ответ");
-          good = {m, v: vi2}; sv("jgood", good);
-          hist.push({role:"model", parts:[{text:ans}]});
+          const o = {mode, tools, img: photo, prompt, start: (mode === "chat" && good && good.m === m) ? good.v : 0};
+          const r = await runAsk(m, vars, o, t => {
+            if(first){ first = false; setStatus("✍️ Отвечаю…"); }
+            box.textContent = t;
+            if(mode !== "math") spFeed(t, false);
+            $("chat").scrollTop = $("chat").scrollHeight;
+          }, log, name);
+          const ans = r.ans;
+          if(mode === "chat"){ good = {m, v: r.vi}; sv("jgood", good); }
+          hist.push({role: "model", parts: [{text: ans.slice(0, 1500)}]});
           hist = hist.slice(-30); sv("jhist", hist);
           box.textContent = ans;
           const s = document.createElement("small");
-          s.textContent = name + " · " + ((Date.now() - t0) / 1000).toFixed(1) + "с";
+          s.textContent = name + (tools ? (mode === "math" ? " +код" : " +поиск") : "") + " · " + ((Date.now() - t0) / 1000).toFixed(1) + "с";
           box.appendChild(s);
+          if(mode === "search" && lastSrc.length){
+            const sr = document.createElement("small");
+            sr.textContent = "Источники: " + lastSrc.slice(0, 3).map(x => x.title).join(", ");
+            box.appendChild(sr);
+          }
           $("chat").scrollTop = $("chat").scrollHeight;
-          spFeed(ans, true);
+          spFeed(mode === "math" ? finalSpeech(ans) : ans, true);
           spEnd(finish);
           return;
         }catch(e){
-          log.push(name + " [" + vi2 + "]: " + e.message.slice(0, 80));
           if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
-          if(/invalid argument|thinking/i.test(e.message)) continue;
-          if(useStream && /Failed to fetch|getReader|reader|stream/i.test(e.message)){
-            useStream = false; vi2--; continue;
-          }
-          break;
         }
       }
     }
@@ -513,6 +722,6 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, Майки. Я Джарвис v15." : "Приветствую, Майки. Я Джарвис v15. Нажми 🎤 или включи 🎧 и просто говори.");
+add("j", hist.length ? "С возвращением, Майки. Я Джарвис v16." : "Приветствую, Майки. Я Джарвис v16. Умею считать, искать, рисовать и смотреть фото 📷. Нажми 🎤 или включи 🎧.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
