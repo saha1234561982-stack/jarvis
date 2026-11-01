@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ru"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Джарвис</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:#00ff41;font-family:monospace;display:flex;flex-direction:column;height:100dvh}
+header{padding:10px 16px;background:#000;border-bottom:1px solid #0a4d1a;display:flex;justify-content:space-between;align-items:center}
+header b{color:#00ff41;font-size:20px;text-shadow:0 0 8px #00ff41}
+header span{display:flex;align-items:center;gap:6px;font-size:13px}
+input[type=checkbox]{accent-color:#00ff41}
+#st{padding:4px 16px;background:#000;font-size:12px;color:#00b32c;border-bottom:1px solid #0a4d1a}
+#chat{flex:1;overflow-y:auto;padding:12px;background:#000}
+.m{max-width:85%;padding:10px 14px;margin:8px 0;border-radius:12px;border:1px solid #0a4d1a;white-space:pre-wrap;line-height:1.4;animation:p .2s;overflow-wrap:anywhere}
+@keyframes p{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.u{background:#031f09;border-color:#00ff41;margin-left:auto}
+.j{background:#000}
+.m img{display:block;max-width:100%;border-radius:8px;margin-top:6px}
+.m a{display:block;margin-top:8px;color:#00ff41;font-size:13px}
+small{display:block;color:#00b32c;opacity:.7;margin-top:6px;font-size:11px}
+.dots i{display:inline-block;width:8px;height:8px;margin:0 2px;border-radius:50%;background:#00ff41;animation:b 1s infinite}
+.dots i:nth-child(2){animation-delay:.15s}
+.dots i:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,80%,100%{opacity:.2}40%{opacity:1}}
+#bar{display:flex;gap:6px;padding:10px;background:#000;border-top:1px solid #0a4d1a}
+#t{flex:1;min-width:0;padding:12px;border-radius:20px;border:1px solid #0a4d1a;background:#000;color:#00ff41;font-size:16px;font-family:monospace}
+#t::placeholder{color:#0a7a22}
+button{border:0;border-radius:50%;width:44px;height:44px;font-size:19px;background:#00ff41;color:#000}
+button.on{background:#ff3b3b}
+.k{background:none;color:#00ff41;width:auto;height:auto;font-size:18px;border-radius:8px;padding:2px 4px}
+.k.on{background:#ff3b3b}
+#prev{display:none;align-items:center;gap:10px;padding:6px 12px;background:#000;border-top:1px solid #0a4d1a}
+#prev.on{display:flex}
+#prev img{width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid #00ff41}
+#prev span{flex:1;font-size:12px;color:#00b32c}
+#pdel{width:32px;height:32px;font-size:15px}
+</style></head><body>
+<header><b>🤖 Джарвис</b>
+<span><label><input type="checkbox" id="v" checked> голос</label>
+<button class="k" id="vc" title="Сменить голос">🎙</button>
+<button class="k" id="hf" title="Режим разговора">🎧</button>
+<button class="k" id="clr" title="Очистить чат">🗑</button>
+<button class="k" id="kb">🔑</button></span></header>
+<div id="st">Готов</div>
+<div id="chat"></div>
+<div id="prev"><img id="pimg" alt=""><span>Фото прикреплено. Напиши вопрос (например «что это?») или просто отправь.</span><button id="pdel">✕</button></div>
+<div id="bar">
+<input id="t" placeholder="Скажи или напиши...">
+<input type="file" id="file" accept="image/*" hidden>
+<button id="cam" title="Фото">📷</button>
+<button id="mic">🎤</button>
+<button id="go">➤</button>
+</div>
+<script>
+window.addEventListener("error", e => {
+  const s = document.getElementById("st");
+  if(s) s.textContent = "⚠ " + e.message;
+});
+const $ = id => document.getElementById(id);
+const API = "https://generativelanguage.googleapis.com/v1beta/";
+const VARS = [{thinkingLevel:"minimal"}, {thinkingLevel:"low"}, {thinkingBudget:0}, null];
+const VARS_MATH = [{thinkingLevel:"medium"}, {thinkingLevel:"low"}, {thinkingBudget:2048}, null];
+const ld = (k, d) => { try{ const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; }catch(e){ return d; } };
+const sv = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+
+let key = localStorage.getItem("jkey") || "";
+let hist = ld("jhist", []);
+let facts = ld("jfacts", []);
+let good = ld("jgood", null);
+let uname = ld("juname", "Майки");
+let people = ld("jpeople", {});
+let pendingPhoto = null;
+let models = null, busy = false, speaking = false, listening = false, hf = false;
+let imgModel = null, imgTried = false, lastSrc = [], useStream = true;
+
+function setStatus(t){ $("st").textContent = t; }
+function idle(){ setStatus(hf ? "🎧 Жду, говори…" : "Готов"); }
+
+function add(cls, text){
+  const d = document.createElement("div");
+  d.className = "m " + cls; d.textContent = text;
+  $("chat").appendChild(d);
+  $("chat").scrollTop = $("chat").scrollHeight;
+  return d;
+}
+function b64blob(b64, mime){
+  const bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+  for(let i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+  return new Blob([u], {type: mime});
+}
+function addImg(mime, b64){
+  const d = add("j", "");
+  const url = URL.createObjectURL(b64blob(b64, mime));
+  const im = document.createElement("img");
+  im.src = url;
+  d.appendChild(im);
+  const a = document.createElement("a");
+  a.href = url; a.download = "jarvis.png"; a.textContent = "💾 Сохранить";
+  d.appendChild(a);
+  $("chat").scrollTop = $("chat").scrollHeight;
+  return d;
+}
+function askKey(){
+  const k = prompt("Вставь ключ Gemini API:");
+  if(k){ key = k.trim(); localStorage.setItem("jkey", key); models = null; ttsTried = false; ttsModel = null; imgTried = false; imgModel = null; }
+}
+$("kb").onclick = askKey;
+
+function sys(mode){
+  const d = new Date().toLocaleString("ru-RU", {weekday:"long", day:"numeric", month:"long", hour:"2-digit", minute:"2-digit"});
+  let s = "Ты Джарвис, умный и учтивый голосовой ассистент. Пользователя зовут " + uname + " (используй именно это имя). ";
+  if(mode === "math"){
+    s += "Сейчас режим задач: реши аккуратно по шагам и проверь вычисления (если нужно, выполни код). Формулы пиши обычным текстом без LaTeX, используй × ÷ √ ^. В самом конце добавь отдельную строку «ИТОГ: …» с коротким ответом одним предложением. ";
+  }else if(mode === "search"){
+    s += "Используй поиск в интернете для свежих данных. Отвечай живо и коротко, 1-3 предложения, без списков и markdown. ";
+  }else{
+    s += "Говори живо и естественно, как человек в разговоре: короткие фразы, 1-3 предложения, без списков, смайликов и markdown. ";
+  }
+  s += "Отвечай по-русски. Сейчас: " + d + ".";
+  if(facts.length) s += " Что ты знаешь о пользователе: " + facts.join("; ") + ".";
+  const pk = Object.keys(people);
+  if(pk.length) s += " Люди из окружения пользователя: " + pk.map(k => k + " — " + people[k]).join("; ") + ".";
+  return s;
+}
+
+// ---------- голос ----------
+let voices = [];
+let vi = ld("jvoice", 0);
+let actx = null, curSrc = null, ttsModel = null, ttsTried = false;
+let sp = null, ttsChain = Promise.resolve();
+
+function loadVoices(){
+  const b = (window.speechSynthesis ? speechSynthesis.getVoices() : [])
+    .filter(v => /^ru/i.test(v.lang)).map(v => ({name: v.name, v}));
+  voices = [
+    {name: "Gemini · Puck (живой, бодрый)", g: "Puck"},
+    {name: "Gemini · Charon (спокойный)", g: "Charon"},
+    {name: "Gemini · Fenrir (энергичный)", g: "Fenrir"},
+    {name: "Gemini · Kore (женский)", g: "Kore"},
+    ...b
+  ];
+}
+loadVoices();
+if(window.speechSynthesis) speechSynthesis.onvoiceschanged = loadVoices;
+
+document.addEventListener("click", () => {
+  try{
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if(actx.state === "suspended") actx.resume();
+  }catch(e){}
+}, {once: true});
+
+async function findTts(){
+  if(ttsModel || ttsTried || !key) return ttsModel;
+  ttsTried = true;
+  try{
+    const d = await call(API + "models?pageSize=100&key=" + key, {}, 8000);
+    const l = (d.models || [])
+      .filter(m => (m.supportedGenerationMethods || []).includes("generateContent") && /tts/.test(m.name))
+      .map(m => m.name);
+    ttsModel = l.find(n => /flash/.test(n)) || l[0] || null;
+  }catch(e){}
+  return ttsModel;
+}
+
+async function gFetch(text, voiceName){
+  const m = await findTts();
+  if(!m) throw new Error("нет TTS-модели");
+  const d = await call(API + m + ":generateContent?key=" + key, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      contents: [{parts: [{text: "Say naturally, warmly and at a brisk pace: " + text.slice(0, 500)}]}],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName}}}
+      }
+    })
+  }, 15000);
+  const parts = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+  const p = parts.find(x => x.inlineData);
+  if(!p) throw new Error("нет аудио");
+  const bin = atob(p.inlineData.data);
+  const n = bin.length >> 1;
+  const f = new Float32Array(n);
+  for(let i = 0; i < n; i++){
+    let s = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+    if(s >= 32768) s -= 65536;
+    f[i] = s / 32768;
+  }
+  const rm = /rate=(\d+)/.exec(p.inlineData.mimeType || "");
+  const rate = rm ? parseInt(rm[1]) : 24000;
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  const b = actx.createBuffer(1, n, rate);
+  b.copyToChannel(f, 0);
+  return b;
+}
+function gQueue(S, text, v){
+  const p = ttsChain.then(() => S.dead ? null : gFetch(text, v)).catch(() => null);
+  ttsChain = p;
+  return p;
+}
+
+async function playBuf(buf){
+  if(actx.state === "suspended") await actx.resume();
+  return new Promise(res => {
+    const src = actx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 1.1;
+    src.connect(actx.destination);
+    src.onended = res;
+    curSrc = src;
+    setStatus("🔊 Говорю…");
+    src.start();
+  });
+}
+
+function bPlay(text, voice){
+  return new Promise(res => {
+    if(!window.speechSynthesis){ res(); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ru-RU";
+    if(voice) u.voice = voice;
+    u.pitch = 1.0; u.rate = 1.15;
+    u.onend = res; u.onerror = res;
+    setStatus("🔊 Говорю…");
+    speechSynthesis.speak(u);
+    setTimeout(res, text.length * 100 + 4000);
+  });
+}
+
+async function playItem(it, S){
+  const e = voices.length ? voices[vi % voices.length] : null;
+  if(it.p){
+    let buf = null;
+    try{ buf = await it.p; }catch(x){}
+    if(S.dead) return;
+    if(buf){ await playBuf(buf); return; }
+    await bPlay(it.text, null);
+    return;
+  }
+  await bPlay(it.text, e ? e.v : null);
+}
+
+function spStop(){
+  const S = sp; sp = null;
+  try{ if(curSrc) curSrc.stop(); }catch(e){}
+  curSrc = null;
+  if(window.speechSynthesis) speechSynthesis.cancel();
+  speaking = false;
+  if(S){ S.dead = true; if(S.cb) S.cb(); }
+}
+function stopAudio(){ spStop(); }
+
+function spStart(){
+  spStop();
+  if(!$("v").checked) return;
+  sp = {pos: 0, q: [], run: false, fin: false, dead: false, cb: null};
+  speaking = true;
+}
+
+function spPush(S, text, e){
+  const t = text.replace(/[*#_`]/g, "").trim();
+  if(!t) return;
+  const it = {text: t};
+  if(e && e.g) it.p = gQueue(S, t, e.g);
+  S.q.push(it);
+}
+
+function spFeed(full, final){
+  const S = sp;
+  if(!S || S.dead) return;
+  const e = voices.length ? voices[vi % voices.length] : null;
+  let rest = full.slice(S.pos);
+  const re = /^[\s\S]{12,}?[.!?…]+["»)]*\s+/;
+  let m;
+  while((m = re.exec(rest))){
+    spPush(S, rest.slice(0, m[0].length), e);
+    S.pos += m[0].length;
+    rest = rest.slice(m[0].length);
+  }
+  if(final){
+    if(rest.trim()) spPush(S, rest, e);
+    S.pos = full.length;
+    S.fin = true;
+  }
+  spRun();
+}
+
+function spEnd(cb){
+  const S = sp;
+  if(!S){ speaking = false; if(cb) cb(); return; }
+  S.cb = cb; S.fin = true;
+  spRun();
+}
+
+async function spRun(){
+  const S = sp;
+  if(!S || S.run) return;
+  S.run = true;
+  while(!S.dead){
+    const it = S.q.shift();
+    if(!it){
+      if(S.fin) break;
+      await new Promise(r => setTimeout(r, 80));
+      continue;
+    }
+    await playItem(it, S);
+  }
+  S.run = false;
+  if(!S.dead){
+    sp = null; speaking = false;
+    if(S.cb) S.cb();
+  }
+}
+
+function speak(text, cb){ spStart(); spFeed(text, true); spEnd(cb); }
+function finish(){ busy = false; idle(); if(hf) setTimeout(listen, 300); }
+const say = t => speak(t, finish);
+
+// ---------- микрофон ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+function listen(){ if(!rec || listening || speaking || busy) return; try{ rec.start(); }catch(e){} }
+if(SR){
+  rec = new SR();
+  rec.lang = "ru-RU";
+  rec.onstart = () => { listening = true; $("mic").classList.add("on"); setStatus("🎤 Слушаю…"); };
+  rec.onend = () => {
+    listening = false; $("mic").classList.remove("on");
+    if(!busy && !speaking){ idle(); if(hf) setTimeout(listen, 500); }
+  };
+  rec.onresult = e => send(e.results[0][0].transcript);
+  rec.onerror = e => {
+    if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+      hf = false; $("hf").classList.remove("on");
+      add("j", "Нет доступа к микрофону. Разреши его для Chrome в настройках.");
+    }else if(!hf && e.error !== "aborted" && e.error !== "no-speech"){
+      add("j", "Микрофон: " + e.error);
+    }
+  };
+  $("mic").onclick = () => {
+    if(listening){ rec.stop(); return; }
+    stopAudio(); listen();
+  };
+  $("hf").onclick = () => {
+    hf = !hf;
+    $("hf").classList.toggle("on", hf);
+    if(hf){ listen(); } else { try{ rec.stop(); }catch(e){} }
+    idle();
+  };
+}else{
+  $("mic").style.display = "none";
+  $("hf").style.display = "none";
+}
+
+// ---------- быстрые команды, память, калькулятор ----------
+function calc(t){
+  if(t.length > 60) return null;
+  if(!(/(сколько будет|посчитай|вычисли|реши|=|\?)/i.test(t) || /[+*\/×÷^]|плюс|минус|умножить|разделить|поделить/i.test(t))) return null;
+  let s = t.toLowerCase()
+    .replace(/сколько будет|посчитай|вычисли|реши|равно|=|\?/g, " ")
+    .replace(/плюс/g, "+").replace(/минус/g, "-")
+    .replace(/умножить на|помножить на/g, "*").replace(/разделить на|поделить на/g, "/")
+    .replace(/[×хx]/g, "*").replace(/÷/g, "/").replace(/\^/g, "**")
+    .replace(/,/g, ".").replace(/\s+/g, "");
+  if(!/^[0-9+\-*\/().]+$/.test(s) || !/[+\-*\/]/.test(s) || !/[0-9]/.test(s)) return null;
+  try{
+    const v = Function('"use strict";return (' + s + ')')();
+    if(typeof v !== "number" || !isFinite(v)) return null;
+    return String(Math.round(v * 1e10) / 1e10);
+  }catch(e){ return null; }
+}
+
+
+// ---------- люди и имена ----------
+const REL = {"друга":"друг","подругу":"подруга","брата":"брат","сестру":"сестра","маму":"мама","папу":"папа","бабушку":"бабушка","дедушку":"дедушка","жену":"жена","мужа":"муж","сына":"сын","дочь":"дочь","одноклассника":"одноклассник","одноклассницу":"одноклассница","коллегу":"коллега","учителя":"учитель","учительницу":"учительница","собаку":"собака","кота":"кот","кошку":"кошка","девушку":"девушка","парня":"парень","соседа":"сосед","соседку":"соседка","тренера":"тренер"};
+const RELW = "мой|моя|моё|мое|мои|друг|подруга|брат|сестра|мама|папа|бабушка|дедушка|жена|муж|сын|дочь|одноклассник|одноклассница|коллега|учитель|учительница|собака|кот|кошка|девушка|парень|сосед|соседка|тренер|начальник|директор";
+const NM = "[A-Za-zА-Яа-яЁё-]{2,25}";
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function findPerson(w){
+  w = w.toLowerCase();
+  for(const k of Object.keys(people)){
+    const kl = k.toLowerCase();
+    if(kl === w) return k;
+    if(kl.length > 3 && w.length > 3 && kl.slice(0, -1) === w.slice(0, -1)) return k;
+  }
+  return null;
+}
+function savePeople(){ sv("jpeople", people); }
+function personCmd(t){
+  const x = t.trim().replace(/[.!?]+$/, "");
+  const pre = "(?:запомни[,:]?\\s*(?:что\\s+)?)?";
+  let m = x.match(new RegExp("^" + pre + "меня зовут\\s+(" + NM + ")$", "i"));
+  if(m){ uname = cap(m[1]); sv("juname", uname); return "Хорошо, буду называть тебя " + uname + "."; }
+  const relKeys = Object.keys(REL).join("|");
+  m = x.match(new RegExp("^" + pre + "(?:мо(?:его|ю|й|я|и|их)\\s+)?(" + relKeys + ")\\s+зовут\\s+(" + NM + ")$", "i"));
+  if(m){
+    const n = cap(m[2]); people[n] = REL[m[1].toLowerCase()]; savePeople();
+    return "Запомнил: " + n + " — " + people[n] + ".";
+  }
+  m = x.match(new RegExp("^" + pre + "(" + NM + ")\\s*(?:—|–|-|это)\\s*((?:" + RELW + ")(?:\\s.*)?)$", "i"));
+  if(m && !/^(я|ты|он|она|оно|мы|они|это|что|кто|мой|моя|мои|моё|мое|меня|мне|тот|эта|этот)$/i.test(m[1])){
+    const n = cap(m[1]); people[n] = m[2].trim(); savePeople();
+    return "Запомнил: " + n + " — " + people[n] + ".";
+  }
+  m = x.match(new RegExp("^забудь\\s+(?!всё|все$)(" + NM + ")$", "i"));
+  if(m){
+    const k = findPerson(m[1]);
+    if(!k) return "Такого человека я не помню.";
+    delete people[k]; savePeople();
+    return "Забыл: " + k + ".";
+  }
+  m = x.match(new RegExp("^(?:кто\\s+(?:такой|такая|это)|что ты (?:знаешь|помнишь) (?:про|о|об)|расскажи (?:про|о|об))\\s+(" + NM + ")$", "i"));
+  if(m){
+    const k = findPerson(m[1]);
+    if(k) return k + " — " + people[k] + ".";
+    return null;
+  }
+  if(/(кого ты знаешь|каких людей ты знаешь|список людей|кого ты помнишь)/i.test(x)){
+    const ks = Object.keys(people);
+    return ks.length ? "Я знаю: " + ks.map(k => k + " — " + people[k]).join("; ") + "." : "Пока никого. Скажи, например: «запомни, что Саня — мой друг».";
+  }
+  return null;
+}
+
+function local(t){
+  const s = t.toLowerCase().replace(/[!?.,]/g, " ").replace(/\s+/g, " ").trim();
+  const now = new Date();
+  const pc = personCmd(t);
+  if(pc !== null) return pc;
+  const m = t.trim().match(/^(запомни|запиши)[:,]?\s+(.+)/i);
+  if(m){
+    const f = m[2].trim().replace(/^что\s+/i, "");
+    facts.push(f); facts = facts.slice(-30); sv("jfacts", facts);
+    return "Запомнил: " + f;
+  }
+  if(/что (ты )?(помнишь|знаешь) (обо мне|про меня)/.test(s))
+    {
+    const pk = Object.keys(people).map(k => k + " — " + people[k]);
+    const all = [...facts, ...pk];
+    return "Тебя зовут " + uname + "." + (all.length ? " Я помню: " + all.join("; ") + "." : " Больше пока ничего. Скажи «запомни» и что нужно запомнить.");
+  }
+  if(/^забудь (всё|все)/.test(s)){
+    facts = []; hist = []; people = {}; sv("jfacts", facts); sv("jhist", hist); savePeople();
+    $("chat").innerHTML = ""; return "Всё забыл.";
+  }
+  if(/^(привет|здравствуй|хай)/.test(s) && s.length < 20) return "Приветствую, " + uname + ". Чем могу помочь?";
+  if(/(который час|сколько времени)/.test(s))
+    return "Сейчас " + now.toLocaleTimeString("ru-RU", {hour:"2-digit", minute:"2-digit"});
+  if(/(какое число|какая дата|какой сегодня день)/.test(s))
+    return "Сегодня " + now.toLocaleDateString("ru-RU", {weekday:"long", day:"numeric", month:"long"});
+  const c = calc(t);
+  if(c !== null) return "Будет " + c;
+  return null;
+}
+
+const IMG_RE = /(нарису[йе]|нарисовать|сгенерируй (мне )?(картинк|изображени|фото|рисунок)|создай (мне )?(картинк|изображени|рисунок)|сделай (мне )?(картинк|рисунок)|покажи (мне )?картинку)/i;
+const SEARCH_RE = /(новост|погод|курс (доллар|евро|валют|биткоин|рубл)|что нового|последни[еяй]|в интернете|поищи|загугли|результат[ыа]? матч|сколько стоит|какая цена)/i;
+const MATH_RE = /(реши|решить|посчитай|подсчитай|вычисли|сколько будет|задач|уравнени|интеграл|производн|корень из|процент|дроб|площад|периметр|теорем|докажи|\d\s*[+*\/×÷^]\s*\d)/i;
+function detectMode(t){
+  if(IMG_RE.test(t)) return "image";
+  if(SEARCH_RE.test(t)) return "search";
+  if(MATH_RE.test(t)) return "math";
+  return "chat";
+}
+function finalSpeech(ans){
+  const m = /ИТОГ:\s*([\s\S]+?)\s*$/i.exec(ans);
+  if(m) return "Ответ: " + m[1].replace(/\s+/g, " ").slice(0, 300);
+  const lines = ans.split("\n").map(x => x.trim()).filter(Boolean);
+  return (lines[lines.length - 1] || ans).slice(0, 300);
+}
+
+$("clr").onclick = () => { hist = []; sv("jhist", hist); $("chat").innerHTML = ""; add("j", "Чат очищен. Факты о тебе я сохранил."); };
+
+// ---------- сеть ----------
+async function call(url, opt, ms){
+  const c = new AbortController();
+  const timer = setTimeout(() => c.abort(), ms);
+  try{
+    const r = await fetch(url, {...opt, signal: c.signal});
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error((d.error && d.error.message) || ("HTTP " + r.status));
+    return d;
+  }catch(e){
+    if(e.name === "AbortError") throw new Error("нет ответа за " + (ms / 1000) + "с");
+    throw e;
+  }finally{ clearTimeout(timer); }
+}
+
+async function getModels(){
+  if(models) return models;
+  const d = await call(API + "models?pageSize=100&key=" + key, {}, 8000);
+  const all = (d.models || [])
+    .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map(m => m.name)
+    .filter(n => /flash/.test(n) && !/image|tts|live|audio|embed|thinking|exp|preview|latest|2\.5/.test(n));
+  const lite = all.filter(n => /lite/.test(n));
+  const rest = all.filter(n => !/lite/.test(n));
+  models = [...lite, ...rest].slice(0, 5);
+  if(!models.length) throw new Error("нет доступных flash-моделей");
+  return models;
+}
+
+function makeBody(variant, o){
+  const c = hist.slice(-10).map(x => x);
+  while(c.length && c[0].role !== "user") c.shift();
+  if(c.length){
+    const last = c[c.length - 1];
+    const parts = [];
+    if(o.img) parts.push({inlineData: {mimeType: o.img.mime, data: o.img.data}});
+    parts.push({text: o.prompt});
+    c[c.length - 1] = {role: last.role, parts};
+  }
+  const body = {
+    systemInstruction: {parts: [{text: sys(o.mode)}]},
+    contents: c,
+    generationConfig: {maxOutputTokens: o.mode === "math" ? 1800 : 400}
+  };
+  if(variant) body.generationConfig.thinkingConfig = variant;
+  if(o.tools) body.tools = o.mode === "math" ? [{code_execution: {}}] : [{google_search: {}}];
+  return body;
+}
+
+function textOf(d){
+  const ps = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+  return ps.filter(p => p.text && !p.thought).map(p => p.text).join("");
+}
+function srcOf(d){
+  const g = d.candidates && d.candidates[0] && d.candidates[0].groundingMetadata;
+  (g && g.groundingChunks || []).forEach(c => {
+    if(c.web && !lastSrc.some(x => x.uri === c.web.uri)) lastSrc.push({title: c.web.title || c.web.uri, uri: c.web.uri});
+  });
+}
+
+async function ask(m, variant, o){
+  const d = await call(API + m + ":generateContent?key=" + key, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(makeBody(variant, o))
+  }, o.mode === "math" ? 40000 : 15000);
+  lastSrc = []; srcOf(d);
+  return textOf(d);
+}
+
+async function askStream(m, variant, o, onText){
+  const ms = o.mode === "math" ? 40000 : 15000;
+  const ctrl = new AbortController();
+  let timer = setTimeout(() => ctrl.abort(), ms);
+  lastSrc = [];
+  try{
+    const r = await fetch(API + m + ":streamGenerateContent?alt=sse&key=" + key, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(makeBody(variant, o)),
+      signal: ctrl.signal
+    });
+    if(!r.ok){
+      const d = await r.json().catch(() => ({}));
+      throw new Error((d.error && d.error.message) || ("HTTP " + r.status));
+    }
+    const rd = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "", full = "";
+    while(true){
+      const {done, value} = await rd.read();
+      if(done) break;
+      clearTimeout(timer);
+      timer = setTimeout(() => ctrl.abort(), ms);
+      buf += dec.decode(value, {stream: true});
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for(const ln of lines){
+        if(!ln.startsWith("data:")) continue;
+        try{
+          const d = JSON.parse(ln.slice(5));
+          srcOf(d);
+          const t = textOf(d);
+          if(t){ full += t; onText(full); }
+        }catch(e){}
+      }
+    }
+    return full;
+  }catch(e){
+    if(e.name === "AbortError") throw new Error("нет ответа за " + (ms / 1000) + "с");
+    throw e;
+  }finally{ clearTimeout(timer); }
+}
+
+async function runAsk(m, vars, o, onText, log, name){
+  for(let i = o.start || 0; i < vars.length; i++){
+    try{
+      spStart();
+      const ans = useStream ? await askStream(m, vars[i], o, onText) : await ask(m, vars[i], o);
+      if(!ans) throw new Error("пустой ответ");
+      return {ans, vi: i};
+    }catch(e){
+      log.push(name + (o.tools ? "+tools" : "") + " [" + i + "]: " + e.message.slice(0, 70));
+      if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
+      if(useStream && /Failed to fetch|getReader|reader|stream/i.test(e.message)){ useStream = false; i--; continue; }
+      if(/invalid argument|thinking|budget|level/i.test(e.message)) continue;
+      throw e;
+    }
+  }
+  throw new Error("варианты размышления не подошли");
+}
+
+// ---------- картинки ----------
+async function findImgModel(){
+  if(imgModel || imgTried || !key) return imgModel;
+  imgTried = true;
+  try{
+    const d = await call(API + "models?pageSize=100&key=" + key, {}, 8000);
+    const l = (d.models || [])
+      .filter(m => (m.supportedGenerationMethods || []).includes("generateContent") && /image/.test(m.name) && !/imagen/.test(m.name))
+      .map(m => m.name);
+    imgModel = l.find(n => /flash/.test(n)) || l[0] || null;
+  }catch(e){}
+  return imgModel;
+}
+
+async function genImage(prompt){
+  const m = await findImgModel();
+  if(!m) throw new Error("для твоего ключа нет модели рисования");
+  let lastErr = null;
+  for(const mod of [["TEXT", "IMAGE"], ["IMAGE"]]){
+    try{
+      const d = await call(API + m + ":generateContent?key=" + key, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({contents: [{role: "user", parts: [{text: prompt}]}], generationConfig: {responseModalities: mod}})
+      }, 60000);
+      const ps = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+      const im = ps.find(p => p.inlineData && /^image\//.test(p.inlineData.mimeType || ""));
+      if(im) return im.inlineData;
+      const t = ps.map(p => p.text || "").join(" ").trim();
+      throw new Error(t ? t.slice(0, 150) : "модель не вернула картинку");
+    }catch(e){
+      lastErr = e;
+      if(!/invalid argument|modalit/i.test(e.message)) break;
+    }
+  }
+  throw lastErr || new Error("не получилось");
+}
+
+async function doImage(text){
+  const box = add("j", "");
+  box.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+  setStatus("🎨 Рисую…");
+  try{
+    const im = await genImage(text);
+    box.remove();
+    addImg(im.mimeType, im.data);
+    hist.push({role: "user", parts: [{text: "[просьба нарисовать] " + text}]});
+    hist.push({role: "model", parts: [{text: "Нарисовал картинку."}]});
+    hist = hist.slice(-30); sv("jhist", hist);
+    say("Готово. Смотри, что получилось.");
+  }catch(e){
+    box.textContent = "Ошибка рисования: " + e.message;
+    finish();
+  }
+}
+
+// ---------- фото ----------
+function shrink(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(im.width, im.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+      const du = c.toDataURL("image/jpeg", 0.82);
+      URL.revokeObjectURL(url);
+      res({mime: "image/jpeg", data: du.split(",")[1], url: du});
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error("не удалось открыть фото")); };
+    im.src = url;
+  });
+}
+function setPending(p){
+  pendingPhoto = p;
+  $("prev").classList.add("on");
+  $("pimg").src = p.url;
+  $("t").placeholder = "Что спросить про фото?";
+  $("t").focus();
+}
+function clearPending(){
+  pendingPhoto = null;
+  $("prev").classList.remove("on");
+  $("pimg").removeAttribute("src");
+  $("t").placeholder = "Скажи или напиши...";
+}
+$("pdel").onclick = clearPending;
+$("cam").onclick = () => $("file").click();
+$("file").onchange = async e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if(!f || busy) return;
+  try{
+    setPending(await shrink(f));
+  }catch(err){ add("j", "Фото: " + err.message); }
+};
+
+// ---------- главная функция ----------
+async function send(text, photo){
+  text = (text || "").trim();
+  if(busy) return;
+  if(!photo && pendingPhoto) photo = pendingPhoto;
+  if(!text && !photo) return;
+  if(photo && photo === pendingPhoto) clearPending();
+  busy = true;
+  const ub = add("u", text || "📷 Фото");
+  if(photo){
+    const im = document.createElement("img");
+    im.src = photo.url;
+    ub.appendChild(im);
+  }
+  $("t").value = "";
+
+  if(!photo){
+    const quick = local(text);
+    if(quick){ add("j", quick); say(quick); return; }
+  }
+
+  if(!key) askKey();
+  if(!key){ add("j", "Нужен ключ: нажми 🔑"); finish(); return; }
+
+  let mode = detectMode(text);
+  if(photo) mode = (!text || mode === "math") ? "math" : "chat";
+  else if(mode === "image"){ await doImage(text); return; }
+
+  const prompt = (photo && !text)
+    ? "Посмотри на фото. Если там задача или пример — реши по шагам. Иначе коротко опиши, что на фото."
+    : text;
+  hist.push({role: "user", parts: [{text: photo ? "[фото] " + (text || "что на фото?") : text}]});
+
+  const box = add("j", "");
+  box.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+  setStatus(mode === "math" ? "🧮 Решаю…" : mode === "search" ? "🔎 Ищу…" : photo ? "📷 Смотрю…" : "💭 Думаю…");
+  const log = [];
+  const vars = mode === "math" ? VARS_MATH : VARS;
+  const wantTools = mode === "math" || mode === "search";
+  try{
+    let list = await getModels();
+    if(good && list.includes(good.m)) list = [good.m, ...list.filter(x => x !== good.m)];
+    for(const m of list){
+      const name = m.replace("models/", "");
+      for(const tools of (wantTools ? [true, false] : [false])){
+        const t0 = Date.now();
+        try{
+          let first = true;
+          const o = {mode, tools, img: photo, prompt, start: (mode === "chat" && good && good.m === m) ? good.v : 0};
+          const r = await runAsk(m, vars, o, t => {
+            if(first){ first = false; setStatus("✍️ Отвечаю…"); }
+            box.textContent = t;
+            if(mode !== "math") spFeed(t, false);
+            $("chat").scrollTop = $("chat").scrollHeight;
+          }, log, name);
+          const ans = r.ans;
+          if(mode === "chat"){ good = {m, v: r.vi}; sv("jgood", good); }
+          hist.push({role: "model", parts: [{text: ans.slice(0, 1500)}]});
+          hist = hist.slice(-30); sv("jhist", hist);
+          box.textContent = ans;
+          const s = document.createElement("small");
+          s.textContent = name + (tools ? (mode === "math" ? " +код" : " +поиск") : "") + " · " + ((Date.now() - t0) / 1000).toFixed(1) + "с";
+          box.appendChild(s);
+          if(mode === "search" && lastSrc.length){
+            const sr = document.createElement("small");
+            sr.textContent = "Источники: " + lastSrc.slice(0, 3).map(x => x.title).join(", ");
+            box.appendChild(sr);
+          }
+          $("chat").scrollTop = $("chat").scrollHeight;
+          spFeed(mode === "math" ? finalSpeech(ans) : ans, true);
+          spEnd(finish);
+          return;
+        }catch(e){
+          if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
+        }
+      }
+    }
+    throw new Error("ни одна модель не ответила");
+  }catch(e){
+    spStop();
+    hist.pop();
+    box.textContent = "Ошибка: " + e.message + "\n\n" + log.join("\n");
+    finish();
+  }
+}
+
+$("go").onclick = () => send($("t").value);
+$("t").addEventListener("keydown", e => { if(e.key === "Enter") send($("t").value); });
+
+$("vc").onclick = () => {
+  loadVoices();
+  if(!voices.length){ add("j", "Голоса не найдены."); return; }
+  vi = (vi + 1) % voices.length; sv("jvoice", vi);
+  add("j", "Голос: " + voices[vi].name);
+  speak("Здравствуйте, " + uname + ". Я Джарвис.", null);
+};
+
+// ---------- старт ----------
+hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v17." : "Приветствую, " + uname + ". Я Джарвис v17. Умею считать, искать, рисовать, смотреть фото 📷 и запоминать людей. Нажми 🎤 или включи 🎧.");
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
+</script></body></html>
