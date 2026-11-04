@@ -15,7 +15,6 @@ header{padding:10px 16px;background:#000;border-bottom:1px solid #0a4d1a;display
 header b{color:#00ff41;font-size:20px;text-shadow:0 0 8px #00ff41}
 header span{display:flex;align-items:center;gap:6px;font-size:13px}
 input[type=checkbox]{accent-color:#00ff41}
-#st{padding:4px 16px;background:#000;font-size:12px;color:#00b32c;border-bottom:1px solid #0a4d1a}
 #chat{flex:1;overflow-y:auto;padding:12px;background:#000}
 .m{max-width:85%;padding:10px 14px;margin:8px 0;border-radius:12px;border:1px solid #0a4d1a;white-space:pre-wrap;line-height:1.4;animation:p .2s;overflow-wrap:anywhere}
 @keyframes p{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -40,6 +39,29 @@ button.on{background:#ff3b3b}
 #prev img{width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid #00ff41}
 #prev span{flex:1;font-size:12px;color:#00b32c}
 #pdel{width:32px;height:32px;font-size:15px}
+#strow{display:flex;justify-content:space-between;align-items:center;padding:2px 16px;background:#000;border-bottom:1px solid #0a4d1a}
+#st{font-size:12px;color:#00b32c;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0}
+#sbtn{display:flex;gap:4px;flex:none}
+#hudwrap{position:relative;height:110px;flex:none;border-bottom:1px solid #0a4d1a;background:#000}
+body.hud #hudwrap{flex:1;height:auto}
+body.hud #chat{display:none}
+#hud{width:100%;height:100%;display:block}
+#lv{position:absolute;right:8px;bottom:8px;width:84px;height:84px;object-fit:cover;border:1px solid #00ff41;border-radius:10px;display:none;background:#000}
+#lv.on{display:block}
+#sub{display:none;position:absolute;left:0;right:0;bottom:0;padding:8px 14px;text-align:center;color:#00ff41;font-size:15px;max-height:34%;overflow:auto;text-shadow:0 0 6px #000}
+body.hud #sub{display:block}
+.m.app{max-width:100%;width:100%}
+.m iframe{width:100%;height:340px;border:1px solid #0a4d1a;border-radius:8px;background:#fff;margin-top:8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.row button{width:auto;height:auto;border-radius:8px;padding:6px 10px;font-size:13px;background:#031f09;color:#00ff41;border:1px solid #00ff41}
+#edit{display:none;align-items:center;gap:10px;padding:6px 12px;background:#000;border-top:1px solid #0a4d1a}
+#edit.on{display:flex}
+#edit span{flex:1;font-size:12px;color:#00b32c}
+#edx{width:32px;height:32px;font-size:15px}
+#full{display:none;position:fixed;inset:0;z-index:50;background:#000}
+#full.on{display:block}
+#full iframe{width:100%;height:100%;border:0;background:#fff}
+#fullx{position:absolute;top:10px;right:10px;z-index:51;width:40px;height:40px}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -47,9 +69,11 @@ button.on{background:#ff3b3b}
 <button class="k" id="hf" title="Режим разговора">🎧</button>
 <button class="k" id="clr" title="Очистить чат">🗑</button>
 <button class="k" id="kb">🔑</button></span></header>
-<div id="st">Готов</div>
+<div id="strow"><span id="st">Готов</span><span id="sbtn"><button class="k" id="camb" title="Камера" hidden>📹</button><button class="k" id="live" title="Живой разговор">📞</button><button class="k" id="hudb" title="HUD">◎</button></span></div>
+<div id="hudwrap"><canvas id="hud"></canvas><video id="lv" playsinline muted></video><div id="sub"></div></div>
 <div id="chat"></div>
 <div id="prev"><img id="pimg" alt=""><span>Фото прикреплено. Напиши вопрос (например «что это?») или просто отправь.</span><button id="pdel">✕</button></div>
+<div id="edit"><span>✏️ Режим правки: напиши, что изменить в приложении («отмена» — выйти).</span><button id="edx">✕</button></div>
 <div id="bar">
 <input id="t" placeholder="Скажи или напиши...">
 <input type="file" id="file" accept="image/*" hidden>
@@ -57,6 +81,7 @@ button.on{background:#ff3b3b}
 <button id="mic">🎤</button>
 <button id="go">➤</button>
 </div>
+<div id="full"><button id="fullx">✕</button><iframe id="fullf" sandbox="allow-scripts"></iframe></div>
 <script>
 window.addEventListener("error", e => {
   const s = document.getElementById("st");
@@ -76,10 +101,21 @@ let good = ld("jgood", null);
 let uname = ld("juname", "Майки");
 let people = ld("jpeople", {});
 let pendingPhoto = null;
+let live = null, outAn = null, onToolStep = null, toolsUsed = 0, editMode = false;
+let lastApp = ld("japp", null);
+let agentOn = ld("jagent", true);
+let notes = ld("jnotes", {notes: [], todos: []});
+let timers = ld("jtimers", []);
+let hudState = "idle";
 let models = null, busy = false, speaking = false, listening = false, hf = false;
 let imgModel = null, imgTried = false, lastSrc = [], useStream = true;
 
-function setStatus(t){ $("st").textContent = t; }
+function setStatus(t){
+  $("st").textContent = t;
+  hudState = t.startsWith("🎤") ? "listen" : t.startsWith("📞") ? "live" : t.startsWith("🔊") ? "speak"
+    : /^(💭|🧮|🔎|🎨|📷|✍|⌨|🔧)/u.test(t) ? "think" : "idle";
+}
+function subtitle(t){ const s = $("sub"); if(s) s.textContent = t; }
 function idle(){ setStatus(hf ? "🎧 Жду, говори…" : "Готов"); }
 
 function add(cls, text){
@@ -87,6 +123,7 @@ function add(cls, text){
   d.className = "m " + cls; d.textContent = text;
   $("chat").appendChild(d);
   $("chat").scrollTop = $("chat").scrollHeight;
+  if(cls === "j" && text) subtitle(text);
   return d;
 }
 function b64blob(b64, mime){
@@ -112,15 +149,20 @@ function askKey(){
 }
 $("kb").onclick = askKey;
 
+const CODE_SYS = "Ты — разработчик мини-приложений. Верни ТОЛЬКО один полный HTML-документ (<!DOCTYPE html> … </html>) со встроенными CSS и JavaScript. Без внешних файлов, библиотек и ссылок, без пояснений и без markdown. Приложение должно работать на телефоне: <meta name=viewport>, крупные кнопки, управление касанием. Оформление тёмное и аккуратное, текст на русском.";
 function sys(mode){
+  if(mode === "code") return CODE_SYS;
   const d = new Date().toLocaleString("ru-RU", {weekday:"long", day:"numeric", month:"long", hour:"2-digit", minute:"2-digit"});
   let s = "Ты Джарвис, умный и учтивый голосовой ассистент. Пользователя зовут " + uname + " (используй именно это имя). ";
   if(mode === "math"){
     s += "Сейчас режим задач: реши аккуратно по шагам и проверь вычисления (если нужно, выполни код). Формулы пиши обычным текстом без LaTeX, используй × ÷ √ ^. В самом конце добавь отдельную строку «ИТОГ: …» с коротким ответом одним предложением. ";
   }else if(mode === "search"){
     s += "Используй поиск в интернете для свежих данных. Отвечай живо и коротко, 1-3 предложения, без списков и markdown. ";
+  }else if(mode === "live"){
+    s += "Ты ведёшь живой голосовой разговор: отвечай очень коротко и естественно, как человек, по-русски. Если пользователь просит что-то сделать (таймер, заметка, поиск, картинка) — вызови нужный инструмент. ";
   }else{
     s += "Говори живо и естественно, как человек в разговоре: короткие фразы, 1-3 предложения, без списков, смайликов и markdown. ";
+    if(mode === "agent") s += "У тебя есть инструменты (таймеры, заметки, память, поиск, рисование, мини-приложения): если пользователь просит что-то сделать, вызови инструмент, а не просто отвечай словами; потом коротко подтверди результат. Не выдумывай результаты инструментов. ";
   }
   s += "Отвечай по-русски. Сейчас: " + d + ".";
   if(facts.length) s += " Что ты знаешь о пользователе: " + facts.join("; ") + ".";
@@ -213,7 +255,7 @@ async function playBuf(buf){
     const src = actx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = 1.1;
-    src.connect(actx.destination);
+    src.connect(getOutAn());
     src.onended = res;
     curSrc = src;
     setStatus("🔊 Говорю…");
@@ -437,9 +479,8 @@ function local(t){
   if(pc !== null) return pc;
   const m = t.trim().match(/^(запомни|запиши)[:,]?\s+(.+)/i);
   if(m){
-    const f = m[2].trim().replace(/^что\s+/i, "");
-    facts.push(f); facts = facts.slice(-30); sv("jfacts", facts);
-    return "Запомнил: " + f;
+    facts.push(m[2].trim()); facts = facts.slice(-30); sv("jfacts", facts);
+    return "Запомнил: " + m[2].trim();
   }
   if(/что (ты )?(помнишь|знаешь) (обо мне|про меня)/.test(s))
     {
@@ -456,6 +497,8 @@ function local(t){
     return "Сейчас " + now.toLocaleTimeString("ru-RU", {hour:"2-digit", minute:"2-digit"});
   if(/(какое число|какая дата|какой сегодня день)/.test(s))
     return "Сегодня " + now.toLocaleDateString("ru-RU", {weekday:"long", day:"numeric", month:"long"});
+  if(/(выключи|отключи) (агента|инструменты)/.test(s)){ agentOn = false; sv("jagent", false); return "Инструменты отключены."; }
+  if(/(включи|подключи) (агента|инструменты)/.test(s)){ agentOn = true; sv("jagent", true); return "Инструменты включены."; }
   const c = calc(t);
   if(c !== null) return "Будет " + c;
   return null;
@@ -464,8 +507,10 @@ function local(t){
 const IMG_RE = /(нарису[йе]|нарисовать|сгенерируй (мне )?(картинк|изображени|фото|рисунок)|создай (мне )?(картинк|изображени|рисунок)|сделай (мне )?(картинк|рисунок)|покажи (мне )?картинку)/i;
 const SEARCH_RE = /(новост|погод|курс (доллар|евро|валют|биткоин|рубл)|что нового|последни[еяй]|в интернете|поищи|загугли|результат[ыа]? матч|сколько стоит|какая цена)/i;
 const MATH_RE = /(реши|решить|посчитай|подсчитай|вычисли|сколько будет|задач|уравнени|интеграл|производн|корень из|процент|дроб|площад|периметр|теорем|докажи|\d\s*[+*\/×÷^]\s*\d)/i;
+const CODE_RE = /(сделай|создай|напиши|построй|разработай)\s+(мне\s+)?(игру|мини-?игру|сайт|веб-?сайт|приложение|калькулятор|страницу|лендинг|программу|секундомер|плеер)/i;
 function detectMode(t){
   if(IMG_RE.test(t)) return "image";
+  if(CODE_RE.test(t)) return "code";
   if(SEARCH_RE.test(t)) return "search";
   if(MATH_RE.test(t)) return "math";
   return "chat";
@@ -508,7 +553,10 @@ async function getModels(){
   return models;
 }
 
-function makeBody(variant, o){
+function timeoutFor(o){ return o.mode === "math" ? 40000 : o.mode === "code" ? 60000 : o.agent ? 25000 : 15000; }
+
+function baseContents(o){
+  if(o.contents) return o.contents.map(x => x);
   const c = hist.slice(-10).map(x => x);
   while(c.length && c[0].role !== "user") c.shift();
   if(c.length){
@@ -518,20 +566,25 @@ function makeBody(variant, o){
     parts.push({text: o.prompt});
     c[c.length - 1] = {role: last.role, parts};
   }
+  return c;
+}
+
+function makeBody(variant, o, contents){
   const body = {
     systemInstruction: {parts: [{text: sys(o.mode)}]},
-    contents: c,
-    generationConfig: {maxOutputTokens: o.mode === "math" ? 1800 : 400}
+    contents: contents || baseContents(o),
+    generationConfig: {maxOutputTokens: o.maxTokens || (o.mode === "math" ? 1800 : 400)}
   };
   if(variant) body.generationConfig.thinkingConfig = variant;
-  if(o.tools) body.tools = o.mode === "math" ? [{code_execution: {}}] : [{google_search: {}}];
+  if(o.agent) body.tools = [{functionDeclarations: TOOLS_DECL}];
+  else if(o.tools) body.tools = o.mode === "math" ? [{code_execution: {}}] : [{google_search: {}}];
   return body;
 }
 
-function textOf(d){
-  const ps = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
-  return ps.filter(p => p.text && !p.thought).map(p => p.text).join("");
+function partsOf(d){
+  return (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
 }
+function textOf(d){ return partsOf(d).filter(p => p.text && !p.thought).map(p => p.text).join(""); }
 function srcOf(d){
   const g = d.candidates && d.candidates[0] && d.candidates[0].groundingMetadata;
   (g && g.groundingChunks || []).forEach(c => {
@@ -544,21 +597,19 @@ async function ask(m, variant, o){
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify(makeBody(variant, o))
-  }, o.mode === "math" ? 40000 : 15000);
+  }, timeoutFor(o));
   lastSrc = []; srcOf(d);
   return textOf(d);
 }
 
-async function askStream(m, variant, o, onText){
-  const ms = o.mode === "math" ? 40000 : 15000;
+async function streamCore(m, body, ms, onChunk){
   const ctrl = new AbortController();
   let timer = setTimeout(() => ctrl.abort(), ms);
-  lastSrc = [];
   try{
     const r = await fetch(API + m + ":streamGenerateContent?alt=sse&key=" + key, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(makeBody(variant, o)),
+      body: JSON.stringify(body),
       signal: ctrl.signal
     });
     if(!r.ok){
@@ -567,7 +618,7 @@ async function askStream(m, variant, o, onText){
     }
     const rd = r.body.getReader();
     const dec = new TextDecoder();
-    let buf = "", full = "";
+    let buf = "";
     while(true){
       const {done, value} = await rd.read();
       if(done) break;
@@ -578,30 +629,70 @@ async function askStream(m, variant, o, onText){
       buf = lines.pop();
       for(const ln of lines){
         if(!ln.startsWith("data:")) continue;
-        try{
-          const d = JSON.parse(ln.slice(5));
-          srcOf(d);
-          const t = textOf(d);
-          if(t){ full += t; onText(full); }
-        }catch(e){}
+        let d = null;
+        try{ d = JSON.parse(ln.slice(5)); }catch(e){}
+        if(d) onChunk(d);
       }
     }
-    return full;
   }catch(e){
     if(e.name === "AbortError") throw new Error("нет ответа за " + (ms / 1000) + "с");
     throw e;
   }finally{ clearTimeout(timer); }
 }
 
+async function askStream(m, variant, o, onText){
+  lastSrc = [];
+  let full = "";
+  await streamCore(m, makeBody(variant, o), timeoutFor(o), d => {
+    srcOf(d);
+    const t = textOf(d);
+    if(t){ full += t; onText(full); }
+  });
+  return full;
+}
+
+// агент: модель сама вызывает инструменты, мы выполняем и возвращаем результат
+async function agentRun(m, variant, o){
+  const contents = baseContents(o);
+  let finalText = "";
+  for(let step = 0; step < 6; step++){
+    let text = "", calls = [], raw = [];
+    await streamCore(m, makeBody(variant, o, contents), timeoutFor(o), d => {
+      srcOf(d);
+      for(const p of partsOf(d)){
+        if(p.thought) continue;
+        raw.push(p);
+        if(p.text){ text += p.text; o.ui.text(text); }
+        if(p.functionCall) calls.push(p.functionCall);
+      }
+    });
+    if(!calls.length){ finalText = text; break; }
+    contents.push({role: "model", parts: raw});
+    const resp = [];
+    for(const c of calls){
+      let out;
+      try{ out = await runTool(c.name, c.args || {}); }catch(e){ out = "Ошибка: " + e.message; }
+      toolsUsed++;
+      resp.push({functionResponse: {name: c.name, response: {output: String(out).slice(0, 4000)}}});
+    }
+    contents.push({role: "user", parts: resp});
+  }
+  if(!finalText && toolsUsed) finalText = "Готово.";
+  return finalText;
+}
+
 async function runAsk(m, vars, o, onText, log, name){
   for(let i = o.start || 0; i < vars.length; i++){
     try{
-      spStart();
-      const ans = useStream ? await askStream(m, vars[i], o, onText) : await ask(m, vars[i], o);
+      if(!o.quiet) spStart();
+      let ans;
+      if(o.agent) ans = await agentRun(m, vars[i], o);
+      else if(useStream && !o.noStream) ans = await askStream(m, vars[i], o, onText);
+      else ans = await ask(m, vars[i], o);
       if(!ans) throw new Error("пустой ответ");
       return {ans, vi: i};
     }catch(e){
-      log.push(name + (o.tools ? "+tools" : "") + " [" + i + "]: " + e.message.slice(0, 70));
+      log.push(name + (o.tools ? "+tools" : "") + (o.agent ? "+agent" : "") + " [" + i + "]: " + e.message.slice(0, 70));
       if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
       if(useStream && /Failed to fetch|getReader|reader|stream/i.test(e.message)){ useStream = false; i--; continue; }
       if(/invalid argument|thinking|budget|level/i.test(e.message)) continue;
@@ -609,6 +700,26 @@ async function runAsk(m, vars, o, onText, log, name){
     }
   }
   throw new Error("варианты размышления не подошли");
+}
+
+// отдельный запрос «в сторону» (для инструментов), не трогает чат и голос
+async function sideAsk(prompt, mode){
+  const list = await getModels();
+  const vars = mode === "math" ? VARS_MATH : VARS;
+  let lastErr = null;
+  for(const m of list){
+    for(const tools of [true, false]){
+      try{
+        const r = await runAsk(m, vars, {mode, tools, prompt, quiet: true, noStream: true,
+          contents: [{role: "user", parts: [{text: prompt}]}]}, null, [], m);
+        return r.ans;
+      }catch(e){
+        lastErr = e;
+        if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
+      }
+    }
+  }
+  throw lastErr || new Error("не получилось");
 }
 
 // ---------- картинки ----------
@@ -709,9 +820,620 @@ $("file").onchange = async e => {
   }catch(err){ add("j", "Фото: " + err.message); }
 };
 
+// ---------- инструменты агента ----------
+const TOOLS_DECL = [
+  {name: "set_timer", description: "Поставить таймер или напоминание. Когда время выйдет, Джарвис скажет сообщение.",
+   parameters: {type: "OBJECT", properties: {
+     seconds: {type: "NUMBER", description: "через сколько секунд сработать"},
+     message: {type: "STRING", description: "что сказать, когда время выйдет"}}, required: ["seconds", "message"]}},
+  {name: "add_note", description: "Сохранить заметку или пункт списка дел.",
+   parameters: {type: "OBJECT", properties: {
+     text: {type: "STRING", description: "текст"},
+     kind: {type: "STRING", description: "note — заметка, todo — дело"}}, required: ["text", "kind"]}},
+  {name: "list_notes", description: "Показать все заметки и список дел."},
+  {name: "done_todo", description: "Вычеркнуть дело из списка по его номеру.",
+   parameters: {type: "OBJECT", properties: {number: {type: "NUMBER", description: "номер дела в списке"}}, required: ["number"]}},
+  {name: "remember_fact", description: "Запомнить факт о пользователе.",
+   parameters: {type: "OBJECT", properties: {text: {type: "STRING", description: "что запомнить"}}, required: ["text"]}},
+  {name: "remember_person", description: "Запомнить человека из окружения пользователя.",
+   parameters: {type: "OBJECT", properties: {
+     name: {type: "STRING", description: "имя"},
+     relation: {type: "STRING", description: "кто это пользователю: друг, брат, учитель и т.д."}}, required: ["name", "relation"]}},
+  {name: "calculate", description: "Точно вычислить выражение из чисел и + - * / ( ) **.",
+   parameters: {type: "OBJECT", properties: {expression: {type: "STRING", description: "выражение"}}, required: ["expression"]}},
+  {name: "get_time", description: "Узнать текущие дату и время."},
+  {name: "web_search", description: "Найти свежую информацию в интернете: новости, погода, курсы, цены, факты.",
+   parameters: {type: "OBJECT", properties: {query: {type: "STRING", description: "поисковый запрос"}}, required: ["query"]}},
+  {name: "draw_image", description: "Нарисовать картинку по описанию и показать её пользователю.",
+   parameters: {type: "OBJECT", properties: {prompt: {type: "STRING", description: "описание картинки"}}, required: ["prompt"]}},
+  {name: "open_link", description: "Показать пользователю кнопку-ссылку для открытия сайта.",
+   parameters: {type: "OBJECT", properties: {
+     url: {type: "STRING", description: "адрес сайта"},
+     title: {type: "STRING", description: "подпись ссылки"}}, required: ["url"]}},
+  {name: "make_app", description: "Создать мини-приложение, игру или сайт (HTML) и запустить его предпросмотр в чате.",
+   parameters: {type: "OBJECT", properties: {description: {type: "STRING", description: "что должно получиться"}}, required: ["description"]}}
+];
+
+function fmtDur(s){
+  s = Math.round(s);
+  if(s < 60) return s + " сек";
+  if(s < 3600) return Math.round(s / 60) + " мин";
+  return (s / 3600).toFixed(1).replace(/\.0$/, "") + " ч";
+}
+function beep(){
+  try{
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if(actx.state === "suspended") actx.resume();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = 880; g.gain.value = 0.15;
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + 0.35);
+  }catch(e){}
+}
+function armTimer(t){
+  setTimeout(() => {
+    timers = timers.filter(x => !(x.at === t.at && x.msg === t.msg)); sv("jtimers", timers);
+    add("j", "⏰ " + t.msg);
+    beep();
+    setTimeout(() => speak(t.msg, null), 450);
+  }, Math.max(0, t.at - Date.now()));
+}
+timers = timers.filter(t => t.at > Date.now() - 10 * 60000);
+timers.forEach(armTimer);
+
+function saveNotes(){ sv("jnotes", notes); }
+function notesText(){
+  const n = notes.notes.map((x, i) => (i + 1) + ". " + x).join("\n");
+  const t = notes.todos.map((x, i) => (i + 1) + ". " + x).join("\n");
+  return "Заметки:\n" + (n || "нет") + "\nСписок дел:\n" + (t || "пуст");
+}
+function safeCalc(expr){
+  const s = String(expr).replace(/\^/g, "**").replace(/,/g, ".").replace(/\s+/g, "");
+  if(!/^[0-9+\-*\/().]+$/.test(s)) return null;
+  try{
+    const v = Function('"use strict";return (' + s + ')')();
+    return (typeof v === "number" && isFinite(v)) ? String(Math.round(v * 1e10) / 1e10) : null;
+  }catch(e){ return null; }
+}
+
+async function runTool(name, a){
+  if(onToolStep) onToolStep(name, a);
+  switch(name){
+    case "set_timer": {
+      const s = Math.max(1, Math.min(86400, Number(a.seconds) || 0));
+      const t = {at: Date.now() + s * 1000, msg: String(a.message || "Время вышло")};
+      timers.push(t); sv("jtimers", timers); armTimer(t);
+      return "Таймер поставлен на " + fmtDur(s) + ". Он сработает, пока приложение открыто.";
+    }
+    case "add_note": {
+      const txt = String(a.text || "").trim();
+      if(!txt) return "Пустой текст.";
+      (a.kind === "todo" ? notes.todos : notes.notes).push(txt); saveNotes();
+      return a.kind === "todo" ? "Добавлено в список дел." : "Заметка сохранена.";
+    }
+    case "list_notes": return notesText();
+    case "done_todo": {
+      const i = Math.round(Number(a.number)) - 1;
+      if(!(i >= 0 && i < notes.todos.length)) return "Нет дела с таким номером.";
+      const x = notes.todos.splice(i, 1)[0]; saveNotes();
+      return "Вычеркнуто: " + x;
+    }
+    case "remember_fact": {
+      const f = String(a.text || "").trim();
+      if(f){ facts.push(f); facts = facts.slice(-30); sv("jfacts", facts); }
+      return "Запомнил.";
+    }
+    case "remember_person": {
+      const n = cap(String(a.name || "").trim());
+      if(n){ people[n] = String(a.relation || "знакомый"); savePeople(); }
+      return "Запомнил: " + n + " — " + people[n] + ".";
+    }
+    case "calculate": {
+      const r = safeCalc(a.expression);
+      return r === null ? "Не удалось посчитать это выражение." : "Результат: " + r;
+    }
+    case "get_time":
+      return new Date().toLocaleString("ru-RU", {weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"});
+    case "web_search":
+      return await sideAsk(String(a.query || ""), "search");
+    case "draw_image": {
+      try{
+        const im = await genImage(String(a.prompt || ""));
+        addImg(im.mimeType, im.data);
+        return "Картинка показана пользователю.";
+      }catch(e){ return "Не получилось нарисовать: " + e.message; }
+    }
+    case "open_link": {
+      let u = String(a.url || "").trim();
+      if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+      const d = add("j", "");
+      const l = document.createElement("a");
+      l.href = u; l.target = "_blank"; l.rel = "noopener"; l.textContent = "🔗 " + (a.title || u);
+      d.appendChild(l);
+      return "Ссылка показана пользователю.";
+    }
+    case "make_app": {
+      try{ await genAndShowApp(String(a.description || ""), false); return "Приложение создано и показано пользователю."; }
+      catch(e){ return "Не получилось создать приложение: " + e.message; }
+    }
+  }
+  return "Неизвестный инструмент.";
+}
+
+
+// ---------- Джарвис-программист ----------
+function extractHtml(t){
+  t = String(t).replace(/^\s*```(?:html)?\s*/i, "").replace(/```\s*$/, "");
+  const i = t.search(/<!DOCTYPE|<html/i);
+  if(i > 0) t = t.slice(i);
+  const j = t.toLowerCase().lastIndexOf("</html>");
+  if(j > 0) t = t.slice(0, j + 7);
+  return t.trim();
+}
+function appTitle(html){
+  const m = /<title>([^<]{1,60})<\/title>/i.exec(html);
+  return m ? m[1].trim() : "Приложение";
+}
+
+async function genApp(desc, base, onProgress){
+  let contents;
+  if(base){
+    contents = [
+      {role: "user", parts: [{text: "Вот текущий код приложения:\n" + base}]},
+      {role: "model", parts: [{text: "Принял."}]},
+      {role: "user", parts: [{text: "Измени приложение: " + desc + ". Верни полный обновлённый HTML-документ."}]}
+    ];
+  }else{
+    contents = [{role: "user", parts: [{text: "Сделай: " + desc}]}];
+  }
+  const list = await getModels();
+  let lastErr = null;
+  for(const m of list){
+    try{
+      const o = {mode: "code", contents, quiet: true, maxTokens: 8000, start: 0};
+      const r = await runAsk(m, VARS, o, t => { if(onProgress) onProgress(t.split("\n").length); }, [], m.replace("models/", ""));
+      const html = extractHtml(r.ans);
+      if(html.indexOf("<") < 0) throw new Error("модель не вернула код");
+      return html;
+    }catch(e){
+      lastErr = e;
+      if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
+    }
+  }
+  throw lastErr || new Error("не получилось написать код");
+}
+
+function mkBtn(label, fn){
+  const b = document.createElement("button");
+  b.textContent = label; b.onclick = fn;
+  return b;
+}
+function openFull(html){ $("fullf").srcdoc = html; $("full").classList.add("on"); }
+$("fullx").onclick = () => { $("full").classList.remove("on"); $("fullf").srcdoc = ""; };
+function saveApp(html){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([html], {type: "text/html"}));
+  a.download = "jarvis-app.html";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function setEdit(on){
+  editMode = on && !!lastApp;
+  $("edit").classList.toggle("on", editMode);
+  $("t").placeholder = editMode ? "Что изменить в приложении?" : "Скажи или напиши...";
+  if(editMode) $("t").focus();
+}
+$("edx").onclick = () => setEdit(false);
+
+function addApp(html){
+  const d = add("j", "");
+  d.classList.add("app");
+  const t = document.createElement("div");
+  t.textContent = "📱 " + appTitle(html);
+  d.appendChild(t);
+  const fr = document.createElement("iframe");
+  fr.setAttribute("sandbox", "allow-scripts");
+  fr.srcdoc = html;
+  d.appendChild(fr);
+  const row = document.createElement("div");
+  row.className = "row";
+  row.append(mkBtn("⛶ На весь экран", () => openFull(html)), mkBtn("💾 Сохранить", () => saveApp(html)), mkBtn("✏️ Править", () => setEdit(true)));
+  d.appendChild(row);
+  $("chat").scrollTop = $("chat").scrollHeight;
+  return d;
+}
+
+async function genAndShowApp(desc, isEdit){
+  setStatus("⌨ Пишу код…");
+  const html = await genApp(desc, isEdit ? lastApp : null, n => setStatus("⌨ Пишу код… " + n + " строк"));
+  lastApp = html;
+  if(html.length < 200000) sv("japp", html);
+  addApp(html);
+  hist.push({role: "user", parts: [{text: (isEdit ? "[правка приложения] " : "[приложение] ") + desc}]});
+  hist.push({role: "model", parts: [{text: "Сделал приложение «" + appTitle(html) + "»."}]});
+  hist = hist.slice(-30); sv("jhist", hist);
+  setEdit(true);
+  return html;
+}
+
+async function doCode(text, isEdit){
+  const box = add("j", "");
+  box.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+  try{
+    await genAndShowApp(text, isEdit);
+    box.remove();
+    say(isEdit ? "Готово, обновил приложение." : "Готово. Приложение запущено, можно пользоваться. Скажи, что изменить.");
+  }catch(e){
+    box.textContent = "Ошибка: " + e.message;
+    finish();
+  }
+}
+
+// ---------- HUD ----------
+function getOutAn(){
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  if(!outAn){
+    outAn = actx.createAnalyser(); outAn.fftSize = 512;
+    outAn.connect(actx.destination);
+  }
+  return outAn;
+}
+function rmsOf(an){
+  if(!an) return 0;
+  const a = new Uint8Array(an.fftSize);
+  an.getByteTimeDomainData(a);
+  let s = 0;
+  for(let i = 0; i < a.length; i++){ const d = (a[i] - 128) / 128; s += d * d; }
+  return Math.sqrt(s / a.length);
+}
+(function(){
+  const cv = $("hud"), g = cv.getContext("2d");
+  let lv = 0;
+  const COL = {idle: "#00ff41", listen: "#00ffd0", think: "#ffd000", speak: "#00ff41", live: "#ff4fd8"};
+  const LBL = {idle: "ГОТОВ", listen: "СЛУШАЮ", think: "ДУМАЮ", speak: "ГОВОРЮ", live: "ЖИВОЙ ЭФИР"};
+  function frame(now){
+    requestAnimationFrame(frame);
+    if(document.hidden) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if(!w || !h) return;
+    if(cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)){
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const t = now / 1000, st = hudState, col = COL[st] || COL.idle;
+    const micAn = live && live.micAn;
+    let target;
+    if(st === "speak") target = Math.max(rmsOf(outAn) * 3, 0.15 + 0.12 * Math.abs(Math.sin(t * 7) * Math.sin(t * 2.3)));
+    else if(st === "listen") target = Math.max(rmsOf(micAn) * 4, 0.10 + 0.06 * Math.sin(t * 5));
+    else if(st === "live") target = Math.max(rmsOf(outAn) * 3, rmsOf(micAn) * 4, 0.08 + 0.04 * Math.sin(t * 3));
+    else if(st === "think") target = 0.10 + 0.05 * Math.sin(t * 9);
+    else target = 0.05 + 0.025 * Math.sin(t * 1.6);
+    lv += (Math.min(target, 0.6) - lv) * 0.2;
+    const cx = w / 2, cy = h / 2 - (document.body.classList.contains("hud") ? h * 0.08 : 6);
+    const R = Math.min(w, h * 1.05) * 0.24;
+    // свечение
+    const gr = g.createRadialGradient(cx, cy, 0, cx, cy, R * (1.7 + lv * 2));
+    gr.addColorStop(0, col + "66"); gr.addColorStop(1, col + "00");
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R * (1.7 + lv * 2), 0, 7); g.fill();
+    // ядро
+    const cr = g.createRadialGradient(cx, cy, 0, cx, cy, R * (0.6 + lv * 0.7));
+    cr.addColorStop(0, "#ffffffcc"); cr.addColorStop(0.35, col + "ee"); cr.addColorStop(1, col + "11");
+    g.fillStyle = cr; g.beginPath(); g.arc(cx, cy, R * (0.6 + lv * 0.7), 0, 7); g.fill();
+    // кольца
+    g.strokeStyle = col; g.lineCap = "round";
+    for(let k = 0; k < 3; k++){
+      const rr = R * (1.0 + k * 0.3), sp = (0.5 + k * 0.45) * (k % 2 ? -1 : 1) * (st === "think" ? 3 : 1);
+      g.lineWidth = 3 - k * 0.6; g.globalAlpha = 0.9 - k * 0.2;
+      for(let a = 0; a < 4; a++){
+        const s0 = t * sp + a * Math.PI / 2 + k;
+        g.beginPath(); g.arc(cx, cy, rr, s0, s0 + 0.9 + k * 0.15); g.stroke();
+      }
+    }
+    // волна вокруг
+    g.globalAlpha = 0.85; g.lineWidth = 2;
+    const N = 72;
+    for(let i = 0; i < N; i++){
+      const a = i / N * Math.PI * 2 + t * 0.2;
+      const len = 3 + 34 * lv * (0.35 + 0.65 * Math.abs(Math.sin(i * 0.9 + t * 5 + Math.sin(t + i))));
+      const r1 = R * 1.12, r2 = r1 + len;
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+      g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke();
+    }
+    // внешние засечки
+    g.globalAlpha = 0.35; g.lineWidth = 1;
+    for(let i = 0; i < 60; i++){
+      const a = i / 60 * Math.PI * 2 - t * 0.1;
+      const r1 = R * 2.05, r2 = r1 + (i % 5 ? 4 : 9);
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+      g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke();
+    }
+    // подписи
+    g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
+    g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v18", w - 8, 14);
+    g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
+    g.globalAlpha = 1;
+  }
+  requestAnimationFrame(frame);
+})();
+$("hudb").onclick = () => document.body.classList.toggle("hud");
+$("hud").onclick = () => { if(!live) $("mic").click(); };
+
+// ---------- живой разговор (Gemini Live) ----------
+function b64(buf){
+  const u = new Uint8Array(buf);
+  let s = "";
+  for(let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+let liveModelsCache = null;
+async function findLiveModels(){
+  if(liveModelsCache) return liveModelsCache;
+  const d = await call(API + "models?pageSize=200&key=" + key, {}, 8000);
+  const l = (d.models || [])
+    .filter(m => (m.supportedGenerationMethods || []).includes("bidiGenerateContent") && !/image|tts/.test(m.name))
+    .map(m => m.name);
+  l.sort((a, b) => (/flash/.test(b) ? 1 : 0) - (/flash/.test(a) ? 1 : 0));
+  liveModelsCache = l.slice(0, 3);
+  return liveModelsCache;
+}
+function liveVoice(){
+  const e = voices.length ? voices[vi % voices.length] : null;
+  return e && e.g ? e.g : "Puck";
+}
+
+async function liveStart(){
+  if(live) return;
+  if(!key) askKey();
+  if(!key) return;
+  if(busy){ add("j", "Подожди, я ещё отвечаю."); return; }
+  stopAudio();
+  if(hf){ hf = false; $("hf").classList.remove("on"); try{ if(rec) rec.stop(); }catch(e){} }
+  setStatus("📞 Подключаюсь…");
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}});
+  }catch(e){ add("j", "Нет доступа к микрофону: " + e.message); idle(); return; }
+  let cands;
+  try{ cands = await findLiveModels(); }
+  catch(e){ stream.getTracks().forEach(t => t.stop()); add("j", "Ошибка: " + e.message); idle(); return; }
+  if(!cands.length){
+    stream.getTracks().forEach(t => t.stop());
+    add("j", "Для твоего ключа нет модели для живого разговора.");
+    idle(); return;
+  }
+  live = {stream, ws: null, ready: false, nextT: 0, srcs: [], playing: false, u: null, j: null, closed: false, noTools: false, camTimer: null, camStream: null};
+  busy = true;
+  $("live").classList.add("on");
+  connectLive(cands, 0);
+}
+
+function connectLive(cands, i){
+  const L = live;
+  if(!L) return;
+  const model = cands[i];
+  const ws = new WebSocket("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + encodeURIComponent(key));
+  L.ws = ws; L.ready = false;
+  ws.onopen = () => {
+    const setup = {
+      model,
+      generationConfig: {responseModalities: ["AUDIO"], speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName: liveVoice()}}}},
+      systemInstruction: {parts: [{text: sys("live")}]},
+      inputAudioTranscription: {},
+      outputAudioTranscription: {}
+    };
+    if(!L.noTools) setup.tools = [{functionDeclarations: TOOLS_DECL}];
+    ws.send(JSON.stringify({setup}));
+  };
+  ws.onmessage = async e => {
+    let txt = e.data;
+    if(typeof txt !== "string"){ try{ txt = await e.data.text(); }catch(x){ return; } }
+    let m = null;
+    try{ m = JSON.parse(txt); }catch(x){ return; }
+    onLiveMsg(m);
+  };
+  ws.onclose = ev => {
+    if(L.closed || live !== L) return;
+    const why = ev.reason ? String(ev.reason).slice(0, 160) : ("код " + ev.code);
+    if(!L.ready){
+      if(!L.noTools && /tool|function/i.test(why)){ L.noTools = true; connectLive(cands, i); return; }
+      if(i + 1 < cands.length){ connectLive(cands, i + 1); return; }
+      add("j", "Не удалось начать живой разговор: " + why);
+    }else{
+      add("j", "📞 Разговор завершён (" + why + ")");
+    }
+    liveStop(true);
+  };
+  ws.onerror = () => {};
+}
+
+function liveText(kind, txt){
+  const L = live;
+  if(!L) return;
+  if(kind === "u"){
+    if(!L.u){ L.u = add("u", ""); }
+    L.j = null;
+    L.u.textContent += txt;
+  }else{
+    if(!L.j){ L.j = add("j", ""); }
+    L.u = null;
+    L.j.textContent += txt;
+    subtitle(L.j.textContent);
+  }
+  $("chat").scrollTop = $("chat").scrollHeight;
+}
+
+function onLiveMsg(m){
+  const L = live;
+  if(!L) return;
+  if(m.setupComplete){
+    L.ready = true;
+    startCapture();
+    $("camb").hidden = false;
+    setStatus("📞 Говори, я слушаю…");
+    add("j", "📞 Живой разговор включён. Говори, можно перебивать. Лучше в наушниках.");
+    return;
+  }
+  const sc = m.serverContent;
+  if(sc){
+    if(sc.interrupted){ stopLivePlayback(); L.j = null; }
+    const parts = (sc.modelTurn && sc.modelTurn.parts) || [];
+    for(const p of parts){
+      if(p.inlineData && /audio/.test(p.inlineData.mimeType || "")) playLive(p.inlineData.data, p.inlineData.mimeType);
+    }
+    if(sc.inputTranscription && sc.inputTranscription.text) liveText("u", sc.inputTranscription.text);
+    if(sc.outputTranscription && sc.outputTranscription.text) liveText("j", sc.outputTranscription.text);
+    if(sc.turnComplete){ L.u = null; L.j = null; }
+  }
+  if(m.toolCall) handleLiveTools(m.toolCall);
+}
+
+async function handleLiveTools(tc){
+  const L = live;
+  const out = [];
+  const prev = onToolStep;
+  onToolStep = (n) => { add("j", "🔧 " + n); };
+  for(const c of (tc.functionCalls || [])){
+    let r;
+    try{ r = await runTool(c.name, c.args || {}); }catch(e){ r = "Ошибка: " + e.message; }
+    out.push({id: c.id, name: c.name, response: {output: String(r).slice(0, 4000)}});
+  }
+  onToolStep = prev;
+  if(L && live === L && L.ws && L.ws.readyState === 1) L.ws.send(JSON.stringify({toolResponse: {functionResponses: out}}));
+}
+
+function startCapture(){
+  const L = live;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AC();
+  L.ctx = ctx;
+  const src = ctx.createMediaStreamSource(L.stream);
+  L.micAn = ctx.createAnalyser(); L.micAn.fftSize = 512;
+  src.connect(L.micAn);
+  const proc = ctx.createScriptProcessor(4096, 1, 1);
+  L.proc = proc;
+  proc.onaudioprocess = e => {
+    if(!live || live !== L || !L.ws || L.ws.readyState !== 1 || !L.ready) return;
+    const inp = e.inputBuffer.getChannelData(0);
+    let s2 = 0;
+    for(let i = 0; i < inp.length; i++) s2 += inp[i] * inp[i];
+    // пока Джарвис говорит, тихий звук (эхо динамика) не отправляем, громкую речь — отправляем (чтобы можно было перебить)
+    if(L.playing && Math.sqrt(s2 / inp.length) < 0.05) return;
+    const ratio = ctx.sampleRate / 16000;
+    const n = Math.floor(inp.length / ratio);
+    const pcm = new Int16Array(n);
+    for(let i = 0; i < n; i++){
+      const s = Math.max(-1, Math.min(1, inp[Math.floor(i * ratio)]));
+      pcm[i] = s < 0 ? s * 32768 : s * 32767;
+    }
+    L.ws.send(JSON.stringify({realtimeInput: {audio: {data: b64(pcm.buffer), mimeType: "audio/pcm;rate=16000"}}}));
+  };
+  src.connect(proc);
+  proc.connect(ctx.destination);
+}
+
+function playLive(data, mime){
+  const L = live;
+  if(!L) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  actx = actx || new AC();
+  if(actx.state === "suspended") actx.resume();
+  const bin = atob(data), n = bin.length >> 1, f = new Float32Array(n);
+  for(let i = 0; i < n; i++){
+    let s = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+    if(s >= 32768) s -= 65536;
+    f[i] = s / 32768;
+  }
+  const rm = /rate=(\d+)/.exec(mime || "");
+  const buf = actx.createBuffer(1, n, rm ? parseInt(rm[1]) : 24000);
+  buf.copyToChannel(f, 0);
+  const src = actx.createBufferSource();
+  src.buffer = buf;
+  src.connect(getOutAn());
+  const t = Math.max(actx.currentTime + 0.02, L.nextT || 0);
+  src.start(t);
+  L.nextT = t + buf.duration;
+  L.srcs.push(src); L.playing = true;
+  src.onended = () => {
+    L.srcs = L.srcs.filter(x => x !== src);
+    if(!L.srcs.length) L.playing = false;
+  };
+}
+function stopLivePlayback(){
+  const L = live;
+  if(!L) return;
+  L.srcs.forEach(s => { try{ s.onended = null; s.stop(); }catch(e){} });
+  L.srcs = []; L.nextT = 0; L.playing = false;
+}
+
+function liveSendText(text){
+  const L = live;
+  if(!L || !L.ready || !L.ws || L.ws.readyState !== 1) return;
+  add("u", text);
+  L.u = null;
+  L.ws.send(JSON.stringify({realtimeInput: {text}}));
+}
+
+async function camToggle(){
+  const L = live;
+  if(!L || !L.ready) return;
+  if(L.camStream){ camStop(); return; }
+  try{
+    L.camStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment", width: {ideal: 640}}});
+  }catch(e){ add("j", "Нет доступа к камере: " + e.message); return; }
+  const v = $("lv");
+  v.srcObject = L.camStream; v.classList.add("on");
+  try{ await v.play(); }catch(e){}
+  $("camb").classList.add("on");
+  const c = document.createElement("canvas");
+  L.camTimer = setInterval(() => {
+    if(!live || live !== L || !L.ws || L.ws.readyState !== 1 || !v.videoWidth) return;
+    const k = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+    c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    const du = c.toDataURL("image/jpeg", 0.6);
+    L.ws.send(JSON.stringify({realtimeInput: {video: {data: du.split(",")[1], mimeType: "image/jpeg"}}}));
+  }, 1000);
+}
+function camStop(){
+  const L = live;
+  if(!L) return;
+  if(L.camTimer){ clearInterval(L.camTimer); L.camTimer = null; }
+  if(L.camStream){ L.camStream.getTracks().forEach(t => t.stop()); L.camStream = null; }
+  $("lv").classList.remove("on"); $("lv").srcObject = null;
+  $("camb").classList.remove("on");
+}
+
+function liveStop(silent){
+  const L = live;
+  if(!L) return;
+  L.closed = true;
+  camStop();
+  try{ if(L.ws) L.ws.close(); }catch(e){}
+  try{ if(L.proc){ L.proc.onaudioprocess = null; L.proc.disconnect(); } }catch(e){}
+  try{ if(L.ctx) L.ctx.close(); }catch(e){}
+  try{ L.stream.getTracks().forEach(t => t.stop()); }catch(e){}
+  stopLivePlayback();
+  live = null;
+  busy = false;
+  $("camb").hidden = true;
+  $("live").classList.remove("on");
+  if(!silent) add("j", "📞 Разговор завершён.");
+  idle();
+}
+$("live").onclick = () => { if(live) liveStop(); else liveStart(); };
+$("camb").onclick = camToggle;
+
 // ---------- главная функция ----------
+const DOTS = '<span class="dots"><i></i><i></i><i></i></span>';
+function argsShort(a){
+  try{ const s = JSON.stringify(a); return s.length > 60 ? s.slice(0, 57) + "…" : s; }catch(e){ return ""; }
+}
+
 async function send(text, photo){
   text = (text || "").trim();
+  if(live){ if(text) liveSendText(text); $("t").value = ""; return; }
   if(busy) return;
   if(!photo && pendingPhoto) photo = pendingPhoto;
   if(!text && !photo) return;
@@ -725,6 +1447,12 @@ async function send(text, photo){
   }
   $("t").value = "";
 
+  if(!photo && editMode && lastApp){
+    if(/^(отмена|хватит|стоп|выйти)\.?$/i.test(text)){ setEdit(false); add("j", "Режим правки выключен."); finish(); return; }
+    await doCode(text, true);
+    return;
+  }
+
   if(!photo){
     const quick = local(text);
     if(quick){ add("j", quick); say(quick); return; }
@@ -736,6 +1464,7 @@ async function send(text, photo){
   let mode = detectMode(text);
   if(photo) mode = (!text || mode === "math") ? "math" : "chat";
   else if(mode === "image"){ await doImage(text); return; }
+  else if(mode === "code"){ await doCode(text, false); return; }
 
   const prompt = (photo && !text)
     ? "Посмотри на фото. Если там задача или пример — реши по шагам. Иначе коротко опиши, что на фото."
@@ -743,34 +1472,54 @@ async function send(text, photo){
   hist.push({role: "user", parts: [{text: photo ? "[фото] " + (text || "что на фото?") : text}]});
 
   const box = add("j", "");
-  box.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+  box.innerHTML = DOTS;
   setStatus(mode === "math" ? "🧮 Решаю…" : mode === "search" ? "🔎 Ищу…" : photo ? "📷 Смотрю…" : "💭 Думаю…");
   const log = [];
   const vars = mode === "math" ? VARS_MATH : VARS;
-  const wantTools = mode === "math" || mode === "search";
+  const agentWanted = mode === "chat" && agentOn;
+  const configs = (mode === "math" || mode === "search") ? [{tools: true}, {tools: false}]
+    : agentWanted ? [{agent: true}, {}] : [{}];
   try{
     let list = await getModels();
     if(good && list.includes(good.m)) list = [good.m, ...list.filter(x => x !== good.m)];
     for(const m of list){
       const name = m.replace("models/", "");
-      for(const tools of (wantTools ? [true, false] : [false])){
+      for(const cfg of configs){
         const t0 = Date.now();
+        let tl = null, tx = null, first = true;
+        toolsUsed = 0;
         try{
-          let first = true;
-          const o = {mode, tools, img: photo, prompt, start: (mode === "chat" && good && good.m === m) ? good.v : 0};
-          const r = await runAsk(m, vars, o, t => {
+          if(cfg.agent){
+            box.innerHTML = "";
+            tl = document.createElement("small"); tl.style.whiteSpace = "pre-wrap";
+            tx = document.createElement("div"); tx.innerHTML = DOTS;
+            box.append(tl, tx);
+          }
+          const setTxt = t => { if(tx) tx.textContent = t; else box.textContent = t; };
+          const onText = t => {
             if(first){ first = false; setStatus("✍️ Отвечаю…"); }
-            box.textContent = t;
+            setTxt(t); subtitle(t);
             if(mode !== "math") spFeed(t, false);
             $("chat").scrollTop = $("chat").scrollHeight;
-          }, log, name);
+          };
+          const o = {
+            mode: cfg.agent ? "agent" : mode, tools: cfg.tools, agent: cfg.agent, img: photo, prompt,
+            start: (mode === "chat" && !cfg.agent && good && good.m === m) ? good.v : 0,
+            ui: {text: onText}
+          };
+          if(cfg.agent) onToolStep = (n, a) => { if(tl) tl.textContent += "🔧 " + n + " " + argsShort(a) + "\n"; setStatus("🔧 " + n + "…"); };
+          let r;
+          try{ r = await runAsk(m, vars, o, onText, log, name); }
+          finally{ onToolStep = null; }
           const ans = r.ans;
-          if(mode === "chat"){ good = {m, v: r.vi}; sv("jgood", good); }
+          if(mode === "chat" && !cfg.agent){ good = {m, v: r.vi}; sv("jgood", good); }
           hist.push({role: "model", parts: [{text: ans.slice(0, 1500)}]});
           hist = hist.slice(-30); sv("jhist", hist);
-          box.textContent = ans;
+          if(tx){ tx.textContent = ans; if(!tl.textContent) tl.remove(); } else box.textContent = ans;
+          subtitle(ans);
           const s = document.createElement("small");
-          s.textContent = name + (tools ? (mode === "math" ? " +код" : " +поиск") : "") + " · " + ((Date.now() - t0) / 1000).toFixed(1) + "с";
+          s.textContent = name + (cfg.tools ? (mode === "math" ? " +код" : " +поиск") : "")
+            + (cfg.agent && toolsUsed ? " +инструменты ×" + toolsUsed : "") + " · " + ((Date.now() - t0) / 1000).toFixed(1) + "с";
           box.appendChild(s);
           if(mode === "search" && lastSrc.length){
             const sr = document.createElement("small");
@@ -783,6 +1532,7 @@ async function send(text, photo){
           return;
         }catch(e){
           if(/API key not valid|API_KEY_INVALID/i.test(e.message)) throw e;
+          if(cfg.agent && toolsUsed) throw e;
         }
       }
     }
@@ -808,6 +1558,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v17." : "Приветствую, " + uname + ". Я Джарвис v17. Умею считать, искать, рисовать, смотреть фото 📷 и запоминать людей. Нажми 🎤 или включи 🎧.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v18."
+  : "Приветствую, " + uname + ". Я Джарвис v18. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
