@@ -1438,7 +1438,7 @@ function avLoop(){
     }
     av.lieK = (av.lieK || 0) + ((av.lying ? 1 : 0) - (av.lieK || 0)) * 0.06;
     sc.rotation.x = 0;
-    if(av.hips) av.hips.rotation.x = av.lieK > 0.01 ? (av.prone ? 1.45 : -1.45) * av.lieK : 0;
+    if(av.hips) av.hips.rotation.x = av.lieK > 0.01 ? (av.prone ? -1.45 : 1.45) * av.lieK : 0;
     if(av.lieK > 0.01) sc.position.y += (-0.85 * av.lieK - sc.position.y) * 0.15;
     if(av.lyingUntil && av.t > av.lyingUntil){ av.lying = false; av.lyingUntil = null; }
     if(av.sitUntil && av.t > av.sitUntil){ av.sitting = false; av.sitUntil = null; }
@@ -1449,16 +1449,23 @@ function avLoop(){
     }
     av.sitK = (av.sitK || 0) + ((av.sitting ? 1 : 0) - (av.sitK || 0)) * 0.08;
     if(av.sitK > 0.01){
-      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (-1.57 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.35 : 0.35) * av.sitK - lg.rotation.z) * 0.15; } });
-      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (1.57 * av.sitK - lg.rotation.x) * 0.15; });
+      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (-1.2 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.6 : 0.6) * av.sitK - lg.rotation.z) * 0.15; } });
+      (av.lowLegs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (1.4 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.5 : 0.5) * av.sitK - lg.rotation.z) * 0.15; } });
       if(av.hips) av.hips.position.y += ((av.hipsY - 0.5 * av.sitK) - av.hips.position.y) * 0.15;
     }
     brainTick(dt);
     if(!(av.prone && av.lieK > 0.3) && av.sitK < 0.01){
-      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (0 - lg.rotation.x) * 0.2; });
+      (av.lowLegs || []).forEach(lg => { if(lg){ lg.rotation.x += (0 - lg.rotation.x) * 0.2; lg.rotation.z += (0 - lg.rotation.z) * 0.2; } });
     }
     if(av.prone && av.lieK > 0.3){
       const kick = Math.sin(av.t * 3) * 0.25;
+      av_rig.forEach((r, i) => {
+        const s = i ? -1 : 1;
+        r.u.rotation.z += (s * 0.9 - r.u.rotation.z) * 0.2;
+        if(r.l) r.l.rotation.z += (s * 1.2 - r.l.rotation.z) * 0.2;
+      });
+      (av.legs || []).forEach((lg, i) => { if(lg) lg.rotation.z += ((i ? -0.25 : 0.25) - lg.rotation.z) * 0.2; });
+      (av.lowLegs || []).forEach((lg, i) => { if(lg) lg.rotation.z += ((i ? -0.3 : 0.3) - lg.rotation.z) * 0.2; });
       (av.legs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((-0.2 + (i ? kick : -kick)) - lg.rotation.x) * 0.2; });
       (av.lowLegs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((1.4 + (i ? -kick : kick)) - lg.rotation.x) * 0.2; });
     }
@@ -1474,13 +1481,13 @@ function avLoop(){
     }
   }
   if(av.head){
-    av.head.rotation.x = nodOff + av.hy + Math.sin(av.t * 0.7) * 0.02 + av.mouth * 0.04 * Math.sin(av.t * 5);
+    av.head.rotation.x = nodOff + av.hy + Math.sin(av.t * 0.7) * 0.02 + av.mouth * 0.04 * Math.sin(av.t * 5) + (av.prone && av.lieK > 0.3 ? 0.35 : 0);
     av.head.rotation.y = av.hx;
     av.head.rotation.z = Math.sin(av.t * 0.45) * 0.025 + (av.stumTilt || 0) * 0.6;
   }
   if(av.vrm && av.vrm.humanoid){
     if(!av.chest) av.chest = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Chest) || av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || false;
-    if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018 + (av.bowVal || 0);
+    if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018 + (av.bowVal || 0) + (av.prone && av.lieK > 0.3 ? -0.5 : 0);
     if(av.vrm && av.vrm.humanoid && THREE.VRMSchema){
       const idle = av.lieK < 0.05 && av.sitK < 0.05;
       if(av.hips && idle){
@@ -2095,7 +2102,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v51", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v52", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2519,7 +2526,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v51."
-  : "Приветствую, " + uname + ". Я Джарвис v51. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v52."
+  : "Приветствую, " + uname + ". Я Джарвис v52. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
