@@ -78,7 +78,7 @@ body.hud #sub{display:block}
 #av canvas{position:absolute;inset:0;z-index:1}
 #avbg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #avmsg,#avcap{z-index:2}
-#av.float{position:fixed;width:200px;height:320px;z-index:45;border:none;border-radius:0;overflow:visible;box-shadow:none;background:transparent;transition:none;touch-action:none}
+#av.float{position:fixed;width:200px;height:320px;z-index:45;border:none;border-radius:0;overflow:visible;box-shadow:none;background:transparent;transition:none;touch-action:none;pointer-events:none}
 #av.float #avbg{display:none}
 #av.float #avmsg,#av.float #avcap{display:none}
 body.clean header label,body.clean header button:not(#kb),
@@ -1129,6 +1129,10 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(очисти|очистить|удали|сотри)\s+(чат|экран|надписи|сообщения|всё|все)$/i.test(x)){
+    $("chat").innerHTML = ""; hist = []; sv("jhist", hist);
+    return "Чат очищен.";
+  }
   if(/^(какие модели|мои модели|список моделей)$/i.test(x)){
     idbNames().then(ns => add("j", ns.length ? "Модели: " + ns.map((n, i) => (i + 1) + ". " + n).join("; ") + "." : "Моделей пока нет. Нажми 📂 и выбери все .vrm сразу."));
     return "Смотрю библиотеку…";
@@ -1387,7 +1391,7 @@ function avLoop(){
       sc.position.y = Math.abs(Math.sin(k)) * 0.04;
       sc.rotation.z = Math.sin(k) * 0.12;
     }else{
-      sc.position.y += (0 - sc.position.y) * 0.2;
+      if(!av.sitting) sc.position.y += (0 - sc.position.y) * 0.2;
     }
     if(av.jump > 0){
       av.jump -= dt;
@@ -1425,6 +1429,12 @@ function avLoop(){
       sc.rotation.z = tilt;
       sc.position.y = Math.sin(p * Math.PI) * 0.05;
       av.stumTilt = tilt;
+    }
+    av.sitK = (av.sitK || 0) + ((av.sitting ? 1 : 0) - (av.sitK || 0)) * 0.08;
+    if(av.sitK > 0.01){
+      (av.legs || []).forEach(lg => { if(lg) lg.rotation.x += (-1.3 * av.sitK - lg.rotation.x) * 0.15; });
+      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (1.4 * av.sitK - lg.rotation.x) * 0.15; });
+      sc.position.y += (-0.3 * av.sitK - sc.position.y) * 0.15;
     }
     if(av.floating) avWalkFloat(dt);
     if(av.earT > 0) av.earT -= dt;
@@ -1622,7 +1632,7 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
-const ACT_LABEL = {spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+const ACT_LABEL = {sit: "Сажусь.", stand: "Встаю.", spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
 function gestureOf(t){
   if(!t) return null;
   const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
@@ -1632,6 +1642,8 @@ function gestureOf(t){
   if(has(["вылез", "выйди", "выходи", "выбирайс"])) return "float";
   if(has(["окн"])) return "dock";
   if(has(["танц", "станцуй"])) return "dance";
+  if(has(["садись", "сядь", "сесть", "присядь"])) return "sit";
+  if(has(["встань", "встать"])) return "stand";
   if(has(["крутись", "кружись", "покружись", "повернись"])) return "spin";
   if(has(["прыга"])) return "jump";
   if(has(["поклонись", "поклон"])) return "bow";
@@ -1683,6 +1695,8 @@ function avDoAct(name){
   if(name === "ears"){ av.earT = 1.2; return; }
   if(name === "come"){ if(av.floating) avFloat(false); avWalkTo(0, 0.3, 0); return; }
   if(name === "dance"){ av.dance = 7; return; }
+  if(name === "sit"){ av.sitting = true; return; }
+  if(name === "stand"){ av.sitting = false; return; }
   if(name === "armsUp"){ av.pose = {mode: "up", t: 4}; return; }
   if(name === "spin"){ av.spin = 1.4; return; }
   if(name === "jump"){ av.jump = 0.7; return; }
@@ -1713,7 +1727,7 @@ function avRect(sel){
   return e ? e.getBoundingClientRect() : null;
 }
 function avFreeSpot(){
-  const bad = ["#chat", "#bar", "header"].map(avRect).filter(Boolean);
+  const bad = [];
   const W = window.innerWidth, H = window.innerHeight;
   for(let i = 0; i < 80; i++){
     const x = Math.random() * (W - 210) + 5;
@@ -1725,6 +1739,7 @@ function avFreeSpot(){
   return null;
 }
 function avWalkFloat(dt){
+  if(av.sitting){ av.walkMoving = false; if(av.fx !== undefined) avDiv.style.left = av.fx + "px"; return; }
   if(avDrag){
     av.fx = parseFloat(avDiv.style.left) || 0;
     av.fy = parseFloat(avDiv.style.top) || 0;
@@ -1802,6 +1817,7 @@ function avSetupLife(vrm){
   });
   const h = vrm.humanoid, B = THREE.VRMSchema.HumanoidBoneName;
   av.legs = h ? [h.getBoneNode(B.LeftUpperLeg), h.getBoneNode(B.RightUpperLeg)] : [];
+  av.lowLegs = h ? [h.getBoneNode(B.LeftLowerLeg), h.getBoneNode(B.RightLowerLeg)] : [];
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
 let avBgRaf = null, avRain = null;
@@ -1978,7 +1994,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v43", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v44", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2401,7 +2417,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v43."
-  : "Приветствую, " + uname + ". Я Джарвис v43. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v44."
+  : "Приветствую, " + uname + ". Я Джарвис v44. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
