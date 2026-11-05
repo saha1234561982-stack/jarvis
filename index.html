@@ -78,7 +78,7 @@ body.hud #sub{display:block}
 #av canvas{position:absolute;inset:0;z-index:1}
 #avbg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #avmsg,#avcap{z-index:2}
-#av.float{position:fixed;width:170px;height:220px;z-index:45;border:1px solid #00ff41;border-radius:14px;overflow:hidden;box-shadow:0 0 16px rgba(0,255,65,.45);background:#000;transition:left 2.2s ease-in-out,top 2.2s ease-in-out;touch-action:none}
+#av.float{position:fixed;width:200px;height:320px;z-index:45;border:1px solid #00ff41;border-radius:14px;overflow:hidden;box-shadow:0 0 16px rgba(0,255,65,.45);background:#000;transition:left 2.2s ease-in-out,top 2.2s ease-in-out;touch-action:none}
 #av.float #avmsg,#av.float #avcap{display:none}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
@@ -1329,7 +1329,16 @@ function avLoop(){
     const dx = av.goal.x - sc.position.x, dz = av.goal.z - sc.position.z;
     const moving = Math.hypot(dx, dz) > 0.012 || av.dance > 0;
     sc.position.x += dx * 0.03; sc.position.z += dz * 0.03;
-    sc.rotation.y += ((Math.PI + av.goalRy) - sc.rotation.y) * 0.05;
+    if(av.spin > 0){
+      av.spin -= dt;
+      sc.rotation.y += dt * 4.5;
+      if(av.spin <= 0){
+        const base = Math.PI + av.goalRy;
+        sc.rotation.y = base + avWrap(sc.rotation.y - base);
+      }
+    }else{
+      sc.rotation.y += ((Math.PI + av.goalRy) - sc.rotation.y) * 0.05;
+    }
     (av.legs || []).forEach((lg, i) => {
       if(!lg) return;
       const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.4 : 0;
@@ -1351,6 +1360,32 @@ function avLoop(){
     }else{
       sc.position.y += (0 - sc.position.y) * 0.2;
     }
+    if(av.jump > 0){
+      av.jump -= dt;
+      sc.position.y = Math.sin((1 - Math.max(0, av.jump) / 0.7) * Math.PI) * 0.25;
+    }
+    if(av.bow > 0){
+      av.bow -= dt;
+      av.bowVal = Math.sin((1 - Math.max(0, av.bow) / 1.6) * Math.PI) * 0.35;
+    }else{
+      av.bowVal = 0;
+    }
+    if(av.pose){
+      av.pose.t -= dt;
+      if(av.pose.t <= 0) av.pose = null;
+      else{
+        const m = av.pose.mode;
+        av_rig.forEach((r, i) => {
+          const up = -r.base * 0.85;
+          let tgt = r.base;
+          if(m === "up") tgt = up;
+          else if(m === "point") tgt = i === 1 ? up : r.base;
+          else if(m === "clap") tgt = Math.sin(av.t * 12) > 0 ? up : r.base * 0.6;
+          r.cur += (tgt - r.cur) * 0.25;
+          r.u.rotation.z = r.cur;
+        });
+      }
+    }
     if(moving && !(av.stum > 0) && Math.random() < 0.0008) avDo("stumble");
     if(av.stum > 0){
       av.stum -= dt;
@@ -1363,14 +1398,14 @@ function avLoop(){
       av.stumTilt = tilt;
     }
     if(av.floating && av.t > (av.roamPause || 0) && av.t > (av.nextRoam || 0)){
-      const L = Math.random() * (window.innerWidth - 170);
+      const L = Math.random() * (window.innerWidth - 210);
       const T = 70 + Math.random() * Math.max(10, window.innerHeight - 310);
       avDiv.style.left = L + "px"; avDiv.style.top = T + "px";
       av.nextRoam = av.t + 3 + Math.random() * 4;
     }
     if(av.earT > 0) av.earT -= dt;
     if(av.auto && !speaking && !live && av.t > av.nextAct){
-      const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "home", "joy", "fun", "surprised", "cute", "stumble"];
+      const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "home", "joy", "fun", "surprised", "cute", "stumble", "jump", "bow"];
       avDo(acts[Math.floor(Math.random() * acts.length)]);
       av.nextAct = av.t + 5 + Math.random() * 7;
     }
@@ -1382,7 +1417,7 @@ function avLoop(){
   }
   if(av.vrm && av.vrm.humanoid){
     if(!av.chest) av.chest = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Chest) || av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || false;
-    if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018;
+    if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018 + (av.bowVal || 0);
   }
   if(av.vrm && !(av.dance > 0) && !(av.stum > 0)) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008;
   av.renderer.render(av.scene, av.cam);
@@ -1422,6 +1457,8 @@ avFile.onchange = async () => {
     av.cam.position.set(ctr.x, focusY, ctr.z + dist + size.z);
     av.cam.lookAt(ctr.x, focusY, ctr.z);
     av.cam.updateProjectionMatrix();
+    av.box = {size: size.clone(), ctr: ctr.clone(), top};
+    avFrame();
     avPose(vrm);
     avSetupLife(vrm);
     avMsg("", false);
@@ -1502,7 +1539,7 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
-const ACT_LABEL = {stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выбираюсь из окна, гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+const ACT_LABEL = {spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
 function gestureOf(t){
   if(!t) return null;
   const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
@@ -1512,6 +1549,13 @@ function gestureOf(t){
   if(has(["вылез", "выйди", "выходи", "выбирайс"])) return "float";
   if(has(["окн"])) return "dock";
   if(has(["танц", "станцуй"])) return "dance";
+  if(has(["крутись", "кружись", "покружись", "повернись"])) return "spin";
+  if(has(["прыга"])) return "jump";
+  if(has(["поклонись", "поклон"])) return "bow";
+  if(has(["руки"]) && has(["вверх"])) return "armsUp";
+  if(has(["руки"]) && has(["вниз"])) return "armsDown";
+  if(has(["хлопай", "хлопни"])) return "clap";
+  if(has(["укажи"])) return "point";
   if(has(["споткн", "упад"])) return "stumble";
   if(has(["сюда"]) && has(["иди", "подойд"])) return "come";
   if(has(["назад"])) return "back";
@@ -1538,6 +1582,9 @@ function avDo(name){
   else if(name === "nod") av.nod = 1.0;
   else avDoAct(name);
 }
+function avWrap(a){
+  return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+}
 function avWalkTo(x, z, ry){
   av.goal.x = Math.max(-0.6, Math.min(0.6, x));
   av.goal.z = Math.max(-0.8, Math.min(0.4, z));
@@ -1553,6 +1600,13 @@ function avDoAct(name){
   if(name === "ears"){ av.earT = 1.2; return; }
   if(name === "come"){ if(av.floating) avFloat(false); avWalkTo(0, 0.3, 0); return; }
   if(name === "dance"){ av.dance = 7; return; }
+  if(name === "armsUp"){ av.pose = {mode: "up", t: 4}; return; }
+  if(name === "spin"){ av.spin = 1.4; return; }
+  if(name === "jump"){ av.jump = 0.7; return; }
+  if(name === "bow"){ av.bow = 1.6; return; }
+  if(name === "armsDown"){ av.pose = {mode: "down", t: 2}; return; }
+  if(name === "clap"){ av.pose = {mode: "clap", t: 4}; return; }
+  if(name === "point"){ av.pose = {mode: "point", t: 3}; return; }
   if(name === "stumble"){ av.stum = 1.2; av.stumDir = Math.random() < 0.5 ? 1 : -1; avEmote("surprised", 1.5); return; }
   if(name === "cute"){ avEmote("cute", 4); return; }
   if(name === "float"){ avFloat(true); return; }
@@ -1560,6 +1614,16 @@ function avDoAct(name){
   if(name === "stop"){ av.auto = false; return; }
   if(name === "free"){ av.auto = true; return; }
   if(name === "joy" || name === "fun" || name === "surprised"){ avEmote(name, 3); }
+}
+function avFrame(){
+  if(!av || !av.box || !av.cam) return;
+  const {size, ctr, top} = av.box;
+  const fit = av.floating ? size.y * 1.12 : size.y * 0.6;
+  const dist = fit / (2 * Math.tan(THREE.MathUtils.degToRad(av.cam.fov / 2)));
+  const focusY = av.floating ? ctr.y : top - size.y * 0.22;
+  av.cam.position.set(ctr.x, focusY, ctr.z + dist + size.z);
+  av.cam.lookAt(ctr.x, focusY, ctr.z);
+  av.cam.updateProjectionMatrix();
 }
 function avResize(){
   if(!av || !av.renderer) return;
@@ -1575,13 +1639,14 @@ function avFloat(on){
   avDiv.classList.toggle("float", on);
   if(on){
     avDiv.classList.add("on");
-    avDiv.style.left = (window.innerWidth - 190) + "px";
-    avDiv.style.top = (window.innerHeight - 260) + "px";
+    avDiv.style.left = (window.innerWidth - 220) + "px";
+    avDiv.style.top = (window.innerHeight - 340) + "px";
     av.nextRoam = av.t + 1;
     if(!avOn){ avOn = true; sv("javatar", true); $("avb").classList.add("on"); }
   }else{
     avDiv.style.left = ""; avDiv.style.top = "";
   }
+  avFrame();
   setTimeout(avResize, 80);
   if(!av.raf) avLoop();
 }
@@ -1774,7 +1839,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v37", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v39", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2197,7 +2262,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v37."
-  : "Приветствую, " + uname + ". Я Джарвис v37. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v39."
+  : "Приветствую, " + uname + ". Я Джарвис v39. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
