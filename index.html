@@ -376,7 +376,7 @@ async function spRun(){
   }
 }
 
-function speak(text, cb){ spStart(); spFeed(text, true); spEnd(cb); }
+function speak(text, cb){ const em = emoteOf(text); if(em) avEmote(em, 3.5); spStart(); spFeed(text, true); spEnd(cb); }
 function finish(){
   busy = false; idle();
   if(pendingSteps.length){ const n = pendingSteps.shift(); setTimeout(() => send(n, null, true), 500); return; }
@@ -1118,6 +1118,8 @@ function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
   if(/помаш|машешь|махни/i.test(x)){ avDo("wave"); return "Машу!"; }
   if(/кивни|кивай/i.test(x)){ avDo("nod"); return "Киваю."; }
+  const em = emoCmd(x);
+  if(em !== undefined){ avEmote(em === "neutral" ? null : em, 4); return em === "neutral" ? "Спокоен." : "Сейчас покажу."; }
   let m = x.match(/^(?:когда я (?:говорю|скажу)|если я (?:говорю|скажу))\s+[«"]?(.+?)[»"]?\s*[,:—–-]\s*(.+)$/i);
   if(m){
     const phrase = m[1].trim();
@@ -1291,6 +1293,7 @@ function avLoop(){
     if(!av.head && av.vrm.humanoid){ av.head = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Head) || null; }
     if(bp){
       bp.setValue(P.Blink, Math.max(0, Math.min(1, b)));
+      avEmoApply(bp, P, dt);
       bp.setValue(P.A, av.mouth);
       if(bp.update) bp.update();
     }
@@ -1380,6 +1383,44 @@ function avPose(vrm){
     });
   }catch(e){}
 }
+const AV_EMO = {joy: "Joy", angry: "Angry", sorrow: "Sorrow", fun: "Fun", surprised: "Surprised"};
+let avEmo = {name: null, t: 0};
+const avEmoW = {};
+function avEmoApply(bp, P, dt){
+  if(avEmo.t > 0) avEmo.t -= dt;
+  Object.keys(AV_EMO).forEach(k => {
+    const key = AV_EMO[k];
+    if(!P[key]) return;
+    const goal = (avEmo.name === k && avEmo.t > 0) ? 0.85 : 0;
+    avEmoW[k] = (avEmoW[k] || 0) + (goal - (avEmoW[k] || 0)) * 0.15;
+    bp.setValue(P[key], Math.max(0, Math.min(1, avEmoW[k])));
+  });
+}
+function avEmote(name, secs){
+  avEmo = name && AV_EMO[name] ? {name, t: secs || 3.5} : {name: null, t: 0};
+}
+function emoteOf(text){
+  if(!text) return null;
+  const words = String(text).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
+  const has = list => words.some(w => list.some(x => w.startsWith(x)));
+  if(has(["злю", "зол", "бесит", "раздраж", "возмут", "ненавиж"])) return "angry";
+  if(has(["грус", "жаль", "печал", "сожален", "сочувств"])) return "sorrow";
+  if(has(["удивл", "неожидан", "ого", "вау", "неужел", "серьезн", "серьёзн"])) return "surprised";
+  if(has(["хаха", "смешн", "ахах", "лол", "забав", "шутк"])) return "fun";
+  if(has(["рад", "ура", "классн", "отличн", "здорово", "прекрасн", "молодец", "весел"])) return "joy";
+  return null;
+}
+function emoCmd(t){
+  const w = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
+  const has = list => w.some(x => list.some(y => x.startsWith(y)));
+  if(has(["удивись"])) return "surprised";
+  if(has(["разозлись", "злись"])) return "angry";
+  if(has(["погрусти", "грусти"])) return "sorrow";
+  if(has(["радуйся", "улыбнись"])) return "joy";
+  if(has(["посмейся", "развеселись"])) return "fun";
+  if(has(["успокойся"])) return "neutral";
+  return undefined;
+}
 function gestureOf(t){
   if(!t) return null;
   const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
@@ -1391,6 +1432,8 @@ const _liveTextOrig = liveText;
 liveText = function(kind, txt){
   const g = typeof txt === "string" ? gestureOf(txt) : null;
   if(g) avDo(g);
+  const em = typeof txt === "string" ? emoteOf(txt) : null;
+  if(em) avEmote(em, 3.5);
   return _liveTextOrig.apply(this, arguments);
 };
 function avDo(name){
@@ -1514,7 +1557,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v31", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v32", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1937,7 +1980,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v31."
-  : "Приветствую, " + uname + ". Я Джарвис v31. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v32."
+  : "Приветствую, " + uname + ". Я Джарвис v32. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
