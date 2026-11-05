@@ -78,8 +78,15 @@ body.hud #sub{display:block}
 #av canvas{position:absolute;inset:0;z-index:1}
 #avbg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #avmsg,#avcap{z-index:2}
-#av.float{position:fixed;width:200px;height:320px;z-index:45;border:1px solid #00ff41;border-radius:14px;overflow:hidden;box-shadow:0 0 16px rgba(0,255,65,.45);background:#000;transition:left 2.2s ease-in-out,top 2.2s ease-in-out;touch-action:none}
+#av.float{position:fixed;width:200px;height:320px;z-index:45;border:none;border-radius:0;overflow:visible;box-shadow:none;background:transparent;transition:left 2.2s ease-in-out,top 2.2s ease-in-out;touch-action:none}
+#av.float #avbg{display:none}
 #av.float #avmsg,#av.float #avcap{display:none}
+body.clean header label,body.clean header button:not(#kb),
+body.clean #st,body.clean #hudwrap,body.clean #hud,body.clean #hudb,
+body.clean #vc,body.clean #hf,body.clean #clr,body.clean #libb,body.clean #avb{display:none !important}
+body.clean #av{flex:1 1 auto;height:auto !important;display:block !important;border-bottom:none}
+body.clean #av.float{position:fixed !important;height:320px !important;width:200px !important;flex:none !important;background:transparent !important;border:none !important}
+body.clean #chat{flex:0 1 32%;min-height:110px}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -125,7 +132,7 @@ let agentOn = ld("jagent", true);
 let notes = ld("jnotes", {notes: [], todos: []});
 let timers = ld("jtimers", []);
 let hudState = "idle";
-let models = null, busy = false, speaking = false, listening = false, hf = false;
+let models = null, busy = false, speaking = false, listening = false, hf = true;
 let pendingSteps = [];
 let imgModel = null, imgTried = false, lastSrc = [], useStream = true;
 
@@ -1125,14 +1132,22 @@ function libCmd(text){
     idbNames().then(ns => add("j", ns.length ? "Модели: " + ns.map((n, i) => (i + 1) + ". " + n).join("; ") + "." : "Моделей пока нет. Нажми 📂 и выбери все .vrm сразу."));
     return "Смотрю библиотеку…";
   }
-  const mm = x.match(/^(?:модель|смени модель|смени на|надень|переоденься в)\s+(.+)$/i);
-  if(mm){
-    const nm = avFindName(mm[1]);
-    if(nm){
-      if(!avOn) avSet(true);
-      avSwitchTo(nm).then(ok => add("j", ok ? "Переодеваюсь: " + nm + "." : "Не получилось загрузить модель."));
-      return "Переодеваюсь: " + nm + "…";
+  const sw = x.split(" ").length <= 5
+    ? x.match(/^(?:переодень(?:ся|сь)|переоденься|смени(?:ть)?|надень|модель)(?:\s+в)?(?:\s+модел[ьи])?\s*(.*)$/i)
+    : null;
+  if(sw){
+    if(!avNames.length){ idbNames().catch(() => {}); return "Моделей пока нет. Нажми 📂 и выбери все .vrm сразу."; }
+    let nm = null;
+    if(sw[1].trim()){
+      nm = avFindName(sw[1]);
+      if(!nm) return "Не нашла такую модель. Скажи «какие модели».";
+    }else{
+      const cur = avNames.indexOf(ld("jvrmname", ""));
+      nm = avNames[(cur + 1) % avNames.length];
     }
+    if(!avOn) avSet(true);
+    avSwitchTo(nm).then(ok => add("j", ok ? "Переодеваюсь: " + nm + "." : "Не получилось загрузить модель."));
+    return "Переодеваюсь: " + nm + "…";
   }
   const g0 = x.split(" ").length <= 4 ? gestureOf(x) : null;
   if(g0){ avDo(g0); return ACT_LABEL[g0]; }
@@ -1221,7 +1236,7 @@ const avFile = document.createElement("input");
 avFile.type = "file"; avFile.accept = ".vrm,.glb,.gltf"; avFile.hidden = true; avFile.multiple = true;
 document.body.appendChild(avFile);
 $("avpick").onclick = () => avFile.click();
-let avOn = ld("javatar", false);
+let avOn = ld("javatar", true);
 let av = null;
 const AV_CDN = {
   three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
@@ -1414,7 +1429,7 @@ function avLoop(){
       const L = Math.random() * (window.innerWidth - 210);
       const T = 70 + Math.random() * Math.max(10, window.innerHeight - 310);
       avDiv.style.left = L + "px"; avDiv.style.top = T + "px";
-      av.nextRoam = av.t + 3 + Math.random() * 4;
+      av.nextRoam = av.t + 2 + Math.random() * 3;
     }
     if(av.earT > 0) av.earT -= dt;
     if(av.auto && !speaking && !live && av.t > av.nextAct){
@@ -1830,6 +1845,8 @@ liveStop = function(...a){
   return _liveStopOrig.apply(this, a);
 };
 
+document.body.classList.add("clean");
+document.addEventListener("click", () => { if(hf && rec && !listening) listen(); }, {once: true});
 // ---------- HUD ----------
 function getOutAn(){
   actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -1913,7 +1930,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v40", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v42", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2336,7 +2353,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v40."
-  : "Приветствую, " + uname + ". Я Джарвис v40. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v42."
+  : "Приветствую, " + uname + ". Я Джарвис v42. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
