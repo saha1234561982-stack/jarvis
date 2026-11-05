@@ -1380,6 +1380,19 @@ function avPose(vrm){
     });
   }catch(e){}
 }
+function gestureOf(t){
+  if(!t) return null;
+  const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
+  if(words.some(w => w.startsWith("помаш"))) return "wave";
+  if(words.some(w => w === "кивни" || w === "кивай")) return "nod";
+  return null;
+}
+const _liveTextOrig = liveText;
+liveText = function(kind, txt){
+  const g = typeof txt === "string" ? gestureOf(txt) : null;
+  if(g) avDo(g);
+  return _liveTextOrig.apply(this, arguments);
+};
 function avDo(name){
   if(!av) return;
   if(name === "wave") av.wave = 2.8;
@@ -1501,7 +1514,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v30", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v31", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1783,7 +1796,11 @@ function argsShort(a){
 
 async function send(text, photo, chain){
   text = (text || "").trim();
-  if(live){ if(text) liveSendText(text); $("t").value = ""; return; }
+  if(live){
+    const g = gestureOf(text);
+    if(g){ avDo(g); $("t").value = ""; add("u", text); add("j", g === "wave" ? "Машу!" : "Киваю."); return; }
+    if(text) liveSendText(text); $("t").value = ""; return;
+  }
   if(busy) return;
   if(!photo && pendingPhoto) photo = pendingPhoto;
   if(!text && !photo) return;
@@ -1920,7 +1937,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v30."
-  : "Приветствую, " + uname + ". Я Джарвис v30. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v31."
+  : "Приветствую, " + uname + ". Я Джарвис v31. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
