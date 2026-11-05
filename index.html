@@ -78,6 +78,8 @@ body.hud #sub{display:block}
 #av canvas{position:absolute;inset:0;z-index:1}
 #avbg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #avmsg,#avcap{z-index:2}
+#av.float{position:fixed;width:170px;height:220px;z-index:45;border:1px solid #00ff41;border-radius:14px;overflow:hidden;box-shadow:0 0 16px rgba(0,255,65,.45);background:#000;transition:left 2.2s ease-in-out,top 2.2s ease-in-out;touch-action:none}
+#av.float #avmsg,#av.float #avcap{display:none}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -1325,7 +1327,7 @@ function avLoop(){
   if(av.vrm && av.goal){
     const sc = av.vrm.scene;
     const dx = av.goal.x - sc.position.x, dz = av.goal.z - sc.position.z;
-    const moving = Math.hypot(dx, dz) > 0.012;
+    const moving = Math.hypot(dx, dz) > 0.012 || av.dance > 0;
     sc.position.x += dx * 0.03; sc.position.z += dz * 0.03;
     sc.rotation.y += ((Math.PI + av.goalRy) - sc.rotation.y) * 0.05;
     (av.legs || []).forEach((lg, i) => {
@@ -1337,6 +1339,24 @@ function avLoop(){
       const twitch = av.earT > 0 ? Math.sin(av.earT * 14) * 0.35 : 0;
       e.o.rotation.z = e.base + twitch * (i % 2 ? -1 : 1) + Math.sin(av.t * 1.3 + i) * 0.03;
     });
+    if(av.dance > 0){
+      av.dance -= dt;
+      const k = av.t * 6;
+      av_rig.forEach((r, i) => {
+        const tgt = (i === 0 ? 1 : -1) * (0.9 + Math.sin(k + i * Math.PI) * 0.5);
+        r.cur = tgt; r.u.rotation.z = tgt;
+      });
+      sc.position.y = Math.abs(Math.sin(k)) * 0.04;
+      sc.rotation.z = Math.sin(k) * 0.12;
+    }else{
+      sc.position.y += (0 - sc.position.y) * 0.2;
+    }
+    if(av.floating && av.t > (av.roamPause || 0) && av.t > (av.nextRoam || 0)){
+      const L = Math.random() * (window.innerWidth - 170);
+      const T = 70 + Math.random() * Math.max(10, window.innerHeight - 310);
+      avDiv.style.left = L + "px"; avDiv.style.top = T + "px";
+      av.nextRoam = av.t + 3 + Math.random() * 4;
+    }
     if(av.earT > 0) av.earT -= dt;
     if(av.auto && !speaking && !live && av.t > av.nextAct){
       const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "home", "joy", "fun", "surprised"];
@@ -1353,7 +1373,7 @@ function avLoop(){
     if(!av.chest) av.chest = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Chest) || av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || false;
     if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018;
   }
-  if(av.vrm) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008;
+  if(av.vrm && !(av.dance > 0)) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008;
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -1466,13 +1486,17 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
-const ACT_LABEL = {wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+const ACT_LABEL = {come: "Иду к тебе!", dance: "Танцую!", float: "Выбираюсь из окна, гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
 function gestureOf(t){
   if(!t) return null;
   const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
   const has = list => words.some(w => list.some(x => w.startsWith(x)));
   if(has(["помаш"])) return "wave";
   if(words.some(w => w === "кивни" || w === "кивай")) return "nod";
+  if(has(["вылез", "выйди", "выходи", "выбирайс"])) return "float";
+  if(has(["окн"])) return "dock";
+  if(has(["танц", "станцуй"])) return "dance";
+  if(has(["сюда"]) && has(["иди", "подойд"])) return "come";
   if(has(["назад"])) return "back";
   if(has(["подойд", "ближе", "вперед", "вперёд"])) return "front";
   if(has(["влево"])) return "left";
@@ -1510,10 +1534,53 @@ function avDoAct(name){
   if(name === "turnL"){ avWalkTo(p.x, p.z, 0.5); return; }
   if(name === "turnR"){ avWalkTo(p.x, p.z, -0.5); return; }
   if(name === "ears"){ av.earT = 1.2; return; }
+  if(name === "come"){ if(av.floating) avFloat(false); avWalkTo(0, 0.3, 0); return; }
+  if(name === "dance"){ av.dance = 7; return; }
+  if(name === "float"){ avFloat(true); return; }
+  if(name === "dock"){ avFloat(false); return; }
   if(name === "stop"){ av.auto = false; return; }
   if(name === "free"){ av.auto = true; return; }
   if(name === "joy" || name === "fun" || name === "surprised"){ avEmote(name, 3); }
 }
+function avResize(){
+  if(!av || !av.renderer) return;
+  const w = avDiv.clientWidth, h = avDiv.clientHeight;
+  if(!w || !h) return;
+  av.renderer.setSize(w, h);
+  av.cam.aspect = w / h;
+  av.cam.updateProjectionMatrix();
+}
+function avFloat(on){
+  if(!av) return;
+  av.floating = on;
+  avDiv.classList.toggle("float", on);
+  if(on){
+    avDiv.classList.add("on");
+    avDiv.style.left = (window.innerWidth - 190) + "px";
+    avDiv.style.top = (window.innerHeight - 260) + "px";
+    av.nextRoam = av.t + 1;
+    if(!avOn){ avOn = true; sv("javatar", true); $("avb").classList.add("on"); }
+  }else{
+    avDiv.style.left = ""; avDiv.style.top = "";
+  }
+  setTimeout(avResize, 80);
+  if(!av.raf) avLoop();
+}
+let avDrag = null;
+avDiv.addEventListener("pointerdown", e => {
+  if(!av || !av.floating) return;
+  avDrag = {dx: e.clientX - avDiv.offsetLeft, dy: e.clientY - avDiv.offsetTop};
+  av.roamPause = av.t + 4;
+  avDiv.style.transition = "none";
+});
+window.addEventListener("pointermove", e => {
+  if(!avDrag) return;
+  avDiv.style.left = (e.clientX - avDrag.dx) + "px";
+  avDiv.style.top = (e.clientY - avDrag.dy) + "px";
+});
+window.addEventListener("pointerup", () => {
+  if(avDrag){ avDrag = null; avDiv.style.transition = ""; }
+});
 function avSetupLife(vrm){
   av.ears = [];
   vrm.scene.traverse(o => {
@@ -1688,7 +1755,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v35", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v36", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2111,7 +2178,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v35."
-  : "Приветствую, " + uname + ". Я Джарвис v35. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v36."
+  : "Приветствую, " + uname + ". Я Джарвис v36. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
