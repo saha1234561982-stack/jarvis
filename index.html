@@ -85,9 +85,10 @@ body.clean header label,body.clean header button:not(#kb),
 body.clean #st,body.clean #hudwrap,body.clean #hud,body.clean #hudb,
 body.clean #vc,body.clean #hf,body.clean #clr,body.clean #libb,body.clean #avb{display:none !important}
 body.clean header b,body.clean #avcap{display:none !important}
-body.clean #av{flex:1 1 auto;height:auto !important;display:block !important;border-bottom:none}
+body.clean #av{flex:0 0 340px;height:340px !important;display:block !important;border-bottom:none}
 body.clean #av.float{position:fixed !important;height:320px !important;width:200px !important;flex:none !important;background:transparent !important;border:none !important}
-body.clean #chat{flex:0 1 32%;min-height:110px}
+body.clean #chat{flex:1 1 auto;min-height:0}
+body.clean #bar{flex:0 0 auto}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -1443,9 +1444,9 @@ function avLoop(){
     }
     av.sitK = (av.sitK || 0) + ((av.sitting ? 1 : 0) - (av.sitK || 0)) * 0.08;
     if(av.sitK > 0.01){
-      (av.legs || []).forEach(lg => { if(lg) lg.rotation.x += (-1.7 * av.sitK - lg.rotation.x) * 0.15; });
-      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (2.0 * av.sitK - lg.rotation.x) * 0.15; });
-      sc.position.y += (-0.55 * av.sitK - sc.position.y) * 0.15;
+      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (-2.0 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.35 : 0.35) * av.sitK - lg.rotation.z) * 0.15; } });
+      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (2.4 * av.sitK - lg.rotation.x) * 0.15; });
+      sc.position.y += (-0.75 * av.sitK - sc.position.y) * 0.15;
     }
     if(av.floating) avWalkFloat(dt);
     if(av.earT > 0) av.earT -= dt;
@@ -2025,7 +2026,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v46", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v47", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2448,7 +2449,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v46."
-  : "Приветствую, " + uname + ". Я Джарвис v46. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v47."
+  : "Приветствую, " + uname + ". Я Джарвис v47. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
