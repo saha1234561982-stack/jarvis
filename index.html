@@ -1352,7 +1352,7 @@ function avLoop(){
     const goal = waving ? -r.base * 0.85 : r.base + sway;
     r.cur += (goal - r.cur) * 0.12;
     r.u.rotation.z = r.cur;
-    if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : 0;
+    if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : (-Math.sign(r.base) * 0.18 + Math.sin(av.t * 0.9 + i) * 0.03);
   });
   if(!(av.gzAt > 0) || av.t > av.gzAt){
     av.gx = (Math.random() - 0.5) * 0.4;
@@ -1395,7 +1395,7 @@ function avLoop(){
       sc.position.y = Math.abs(Math.sin(k)) * 0.04;
       sc.rotation.z = Math.sin(k) * 0.12;
     }else{
-      if(!av.sitting) sc.position.y += (0 - sc.position.y) * 0.2;
+      if(!av.sitting && !av.lying) sc.position.y += (0 - sc.position.y) * 0.2;
     }
     if(av.jump > 0){
       av.jump -= dt;
@@ -1437,7 +1437,9 @@ function avLoop(){
       av.stumTilt = tilt;
     }
     av.lieK = (av.lieK || 0) + ((av.lying ? 1 : 0) - (av.lieK || 0)) * 0.06;
-    sc.rotation.x = av.lieK > 0.01 ? (av.prone ? 1.45 : -1.45) * av.lieK : 0;
+    sc.rotation.x = 0;
+    if(av.hips) av.hips.rotation.x = av.lieK > 0.01 ? (av.prone ? 1.45 : -1.45) * av.lieK : 0;
+    if(av.lieK > 0.01) sc.position.y += (-0.85 * av.lieK - sc.position.y) * 0.15;
     if(av.lyingUntil && av.t > av.lyingUntil){ av.lying = false; av.lyingUntil = null; }
     if(av.sitUntil && av.t > av.sitUntil){ av.sitting = false; av.sitUntil = null; }
     if(av.blushMats && av.blushMats.length){
@@ -1447,15 +1449,15 @@ function avLoop(){
     }
     av.sitK = (av.sitK || 0) + ((av.sitting ? 1 : 0) - (av.sitK || 0)) * 0.08;
     if(av.sitK > 0.01){
-      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (-2.0 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.35 : 0.35) * av.sitK - lg.rotation.z) * 0.15; } });
-      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (2.4 * av.sitK - lg.rotation.x) * 0.15; });
-      sc.position.y += (-0.75 * av.sitK - sc.position.y) * 0.15;
+      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (-1.57 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.35 : 0.35) * av.sitK - lg.rotation.z) * 0.15; } });
+      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (1.57 * av.sitK - lg.rotation.x) * 0.15; });
+      if(av.hips) av.hips.position.y += ((av.hipsY - 0.5 * av.sitK) - av.hips.position.y) * 0.15;
     }
     brainTick(dt);
     if(av.prone && av.lieK > 0.3){
       const kick = Math.sin(av.t * 3) * 0.25;
       (av.legs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((-0.2 + (i ? kick : -kick)) - lg.rotation.x) * 0.2; });
-      (av.lowLegs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((2.2 + (i ? -kick : kick)) - lg.rotation.x) * 0.2; });
+      (av.lowLegs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((1.4 + (i ? -kick : kick)) - lg.rotation.x) * 0.2; });
     }
     if(av.floating) avWalkFloat(dt);
     if(av.earT > 0) av.earT -= dt;
@@ -1476,8 +1478,27 @@ function avLoop(){
   if(av.vrm && av.vrm.humanoid){
     if(!av.chest) av.chest = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Chest) || av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || false;
     if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018 + (av.bowVal || 0);
+    if(av.vrm && av.vrm.humanoid && THREE.VRMSchema){
+      const idle = av.lieK < 0.05 && av.sitK < 0.05;
+      if(av.hips && idle){
+        av.hips.rotation.z += (Math.sin(av.t * 0.5) * 0.025 - av.hips.rotation.z) * 0.1;
+        av.hips.rotation.y += (Math.sin(av.t * 0.35) * 0.05 - av.hips.rotation.y) * 0.1;
+      }
+      if(av.spineN === undefined) av.spineN = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || null;
+      if(av.spineN && idle) av.spineN.rotation.z = Math.sin(av.t * 0.5 + 1) * 0.02;
+      if(av.chest){
+        if(av.nextFidget === undefined) av.nextFidget = av.t + 6 + Math.random() * 8;
+        if(av.t > av.nextFidget){ av.fidget = 1; av.nextFidget = av.t + 6 + Math.random() * 8; }
+        if(av.fidget > 0){
+          av.fidget -= dt;
+          av.chest.rotation.z = Math.sin((1 - Math.max(0, av.fidget)) * Math.PI) * 0.05;
+        }else{
+          av.chest.rotation.z *= 0.9;
+        }
+      }
+    }
   }
-  if(av.vrm && !(av.dance > 0) && !(av.stum > 0)) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008;
+  if(av.vrm && !(av.dance > 0) && !(av.stum > 0)) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008 + (av.walkMoving ? -0.05 * (av.fdir || 1) : 0);
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -1893,6 +1914,8 @@ function avSetupLife(vrm){
     });
   });
   av.lowLegs = h ? [h.getBoneNode(B.LeftLowerLeg), h.getBoneNode(B.RightLowerLeg)] : [];
+  av.hips = h ? h.getBoneNode(B.Hips) : null;
+  av.hipsY = av.hips ? av.hips.position.y : 0;
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
 let avBgRaf = null, avRain = null;
@@ -2069,7 +2092,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v48", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v50", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2493,7 +2516,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v48."
-  : "Приветствую, " + uname + ". Я Джарвис v48. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v50."
+  : "Приветствую, " + uname + ". Я Джарвис v50. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
