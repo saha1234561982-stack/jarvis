@@ -69,7 +69,7 @@ body.hud #sub{display:block}
 #lib .lb{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 #lib .lb button{width:auto;height:auto;border-radius:8px;padding:6px 8px;font-size:14px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
 #libl{color:#00b32c;font-size:14px;padding-top:8px}
-#av{height:260px;display:none;background:#000;border-bottom:1px solid #0a4d1a;position:relative}
+#av{height:340px;display:none;background:#000;border-bottom:1px solid #0a4d1a;position:relative}
 #av.on{display:block}
 #av canvas{display:block;width:100%;height:100%}
 #avmsg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:13px;color:#00b32c;text-align:center;padding:12px}
@@ -1317,6 +1317,18 @@ avFile.onchange = async () => {
     vrm.scene.rotation.y = Math.PI;
     if(av.vrm) av.scene.remove(av.vrm.scene);
     av.vrm = vrm; av.scene.add(vrm.scene);
+    // камера подстраивается под размер модели: верх тела и голова в кадре
+    const box = new THREE.Box3().setFromObject(vrm.scene);
+    const size = box.getSize(new THREE.Vector3());
+    const ctr = box.getCenter(new THREE.Vector3());
+    const top = box.max.y;
+    const focusY = top - size.y * 0.22;
+    const fitH = size.y * 0.6;
+    const dist = fitH / (2 * Math.tan(THREE.MathUtils.degToRad(av.cam.fov / 2)));
+    av.cam.aspect = av.cam.aspect || 1;
+    av.cam.position.set(ctr.x, focusY, ctr.z + dist + size.z);
+    av.cam.lookAt(ctr.x, focusY, ctr.z);
+    av.cam.updateProjectionMatrix();
     avMsg("", false);
     avCap.style.display = "block";
     if(!av.raf) avLoop();
@@ -1423,7 +1435,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v25", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v26", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1842,7 +1854,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v25."
-  : "Приветствую, " + uname + ". Я Джарвис v25. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v26."
+  : "Приветствую, " + uname + ". Я Джарвис v26. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
