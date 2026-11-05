@@ -75,6 +75,9 @@ body.hud #sub{display:block}
 #avmsg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:13px;color:#00b32c;text-align:center;padding:12px}
 #avmsg button{border-radius:20px;width:auto;height:auto;padding:8px 14px;font-size:14px;background:#00ff41;color:#000}
 #avcap{position:absolute;left:0;right:0;bottom:0;padding:4px 8px;font-size:10px;line-height:1.3;color:#00b32c;background:rgba(0,0,0,.7);text-align:center;display:none}
+#av canvas{position:absolute;inset:0;z-index:1}
+#avbg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+#avmsg,#avcap{z-index:2}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -1259,10 +1262,10 @@ function avMsg(text, show){
 }
 function avInit(){
   const W = avDiv.clientWidth || 360, H = avDiv.clientHeight || 260;
-  const renderer = new THREE.WebGLRenderer({antialias: true});
+  const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(W, H);
-  renderer.setClearColor(0x000000, 1);
+  renderer.setClearColor(0x000000, 0);
   avDiv.insertBefore(renderer.domElement, $("avmsg"));
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(25, W / H, 0.1, 20);
@@ -1521,9 +1524,57 @@ function avSetupLife(vrm){
   av.legs = h ? [h.getBoneNode(B.LeftUpperLeg), h.getBoneNode(B.RightUpperLeg)] : [];
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
+let avBgRaf = null, avRain = null;
+function avRainInit(){
+  const cv = document.createElement("canvas");
+  cv.id = "avbg";
+  avDiv.insertBefore(cv, avDiv.firstChild);
+  avRain = {cv, ctx: cv.getContext("2d"), cols: [], fs: 14, w: 0, h: 0, last: performance.now()};
+  avRainSize();
+}
+function avRainSize(){
+  const r = avRain;
+  const w = avDiv.clientWidth || 360, h = avDiv.clientHeight || 340;
+  if(w === r.w && h === r.h) return;
+  r.w = w; r.h = h; r.cv.width = w; r.cv.height = h;
+  const n = Math.floor(w / r.fs);
+  r.cols = Array.from({length: n}, () => Array.from({length: 3}, () => ({y: Math.random() * h, v: 40 + Math.random() * 90})));
+  r.ctx.fillStyle = "#000";
+  r.ctx.fillRect(0, 0, w, h);
+}
+function avRainLoop(){
+  if(!avRain) return;
+  if(!avDiv.classList.contains("on")){ avBgRaf = null; return; }
+  avRainSize();
+  const r = avRain, c = r.ctx;
+  const now = performance.now();
+  const dt = Math.min((now - r.last) / 1000, 0.05);
+  r.last = now;
+  c.fillStyle = "rgba(0,0,0,0.13)";
+  c.fillRect(0, 0, r.w, r.h);
+  c.font = r.fs + "px monospace";
+  c.textAlign = "center";
+  r.cols.forEach((drops, i) => {
+    const x = i * r.fs + r.fs / 2;
+    drops.forEach(d => {
+      d.y -= d.v * dt;
+      if(d.y < -r.fs){ d.y = r.h + Math.random() * r.h * 0.3; d.v = 40 + Math.random() * 90; }
+      c.fillStyle = "#c8ffd8";
+      c.fillText(String(Math.floor(Math.random() * 10)), x, d.y);
+      c.fillStyle = "rgba(0,255,65,0.75)";
+      c.fillText(String(Math.floor(Math.random() * 10)), x, d.y + r.fs);
+    });
+  });
+  avBgRaf = requestAnimationFrame(avRainLoop);
+}
+function avRainKick(){
+  if(!avRain) avRainInit();
+  if(!avBgRaf) avBgRaf = requestAnimationFrame(avRainLoop);
+}
 function avSet(on){
   avOn = on; sv("javatar", on);
   avDiv.classList.toggle("on", on);
+  if(on) avRainKick();
   $("avb").classList.toggle("on", on);
   if(!on) return;
   avLibs().then(() => {
@@ -1541,7 +1592,7 @@ if(avOn) avSet(true);
 const _liveStartOrig = liveStart;
 liveStart = async function(...a){
   if(!avOn){
-    avDiv.classList.add("on"); avLiveShown = true;
+    avDiv.classList.add("on"); avLiveShown = true; avRainKick();
     avLibs().then(() => { if(!av) avInit(); if(!av.raf) avLoop(); }).catch(() => {});
   }
   const r = _liveStartOrig.apply(this, a);
@@ -1637,7 +1688,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v34", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v35", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2060,7 +2111,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v34."
-  : "Приветствую, " + uname + ". Я Джарвис v34. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v35."
+  : "Приветствую, " + uname + ". Я Джарвис v35. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
