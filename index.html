@@ -78,12 +78,13 @@ body.hud #sub{display:block}
 #av canvas{position:absolute;inset:0;z-index:1}
 #avbg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #avmsg,#avcap{z-index:2}
-#av.float{position:fixed;width:200px;height:320px;z-index:45;border:none;border-radius:0;overflow:visible;box-shadow:none;background:transparent;transition:left 2.2s ease-in-out,top 2.2s ease-in-out;touch-action:none}
+#av.float{position:fixed;width:200px;height:320px;z-index:45;border:none;border-radius:0;overflow:visible;box-shadow:none;background:transparent;transition:none;touch-action:none}
 #av.float #avbg{display:none}
 #av.float #avmsg,#av.float #avcap{display:none}
 body.clean header label,body.clean header button:not(#kb),
 body.clean #st,body.clean #hudwrap,body.clean #hud,body.clean #hudb,
 body.clean #vc,body.clean #hf,body.clean #clr,body.clean #libb,body.clean #avb{display:none !important}
+body.clean header b,body.clean #avcap{display:none !important}
 body.clean #av{flex:1 1 auto;height:auto !important;display:block !important;border-bottom:none}
 body.clean #av.float{position:fixed !important;height:320px !important;width:200px !important;flex:none !important;background:transparent !important;border:none !important}
 body.clean #chat{flex:0 1 32%;min-height:110px}
@@ -1355,7 +1356,7 @@ function avLoop(){
   if(av.vrm && av.goal){
     const sc = av.vrm.scene;
     const dx = av.goal.x - sc.position.x, dz = av.goal.z - sc.position.z;
-    const moving = Math.hypot(dx, dz) > 0.012 || av.dance > 0;
+    const moving = Math.hypot(dx, dz) > 0.012 || av.dance > 0 || av.walkMoving;
     sc.position.x += dx * 0.03; sc.position.z += dz * 0.03;
     if(av.spin > 0){
       av.spin -= dt;
@@ -1425,12 +1426,7 @@ function avLoop(){
       sc.position.y = Math.sin(p * Math.PI) * 0.05;
       av.stumTilt = tilt;
     }
-    if(av.floating && av.t > (av.roamPause || 0) && av.t > (av.nextRoam || 0)){
-      const L = Math.random() * (window.innerWidth - 210);
-      const T = 70 + Math.random() * Math.max(10, window.innerHeight - 310);
-      avDiv.style.left = L + "px"; avDiv.style.top = T + "px";
-      av.nextRoam = av.t + 2 + Math.random() * 3;
-    }
+    if(av.floating) avWalkFloat(dt);
     if(av.earT > 0) av.earT -= dt;
     if(av.auto && !speaking && !live && av.t > av.nextAct){
       const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "home", "joy", "fun", "surprised", "cute", "stumble", "jump", "bow"];
@@ -1455,18 +1451,18 @@ avFile.onchange = async () => {
   const files = Array.from(avFile.files || []);
   avFile.value = "";
   if(!files.length) return;
-  const names = [];
+  const names = [], failed = [];
   for(const f of files){
     const name = f.name.replace(/\.(vrm|glb|gltf)$/i, "");
-    await idbPut(name, f);
-    names.push(name);
+    try{ await idbPut(name, f); names.push(name); }
+    catch(e){ failed.push(name); }
   }
   await idbNames();
-  sv("jvrmname", names[0]);
-  await avLoadBlob(files[0], names[0]);
-  add("j", names.length > 1
-    ? "Сохранил моделей: " + names.length + " (" + names.map((n, i) => (i + 1) + ". " + n).join(", ") + "). Меняй словом: «модель 2» или «модель " + names[1] + "»."
-    : "Сохранил модель «" + names[0] + "». Меняй словом: «модель " + names[0] + "».");
+  if(names.length) sv("jvrmname", names[0]);
+  if(names.length) await avLoadBlob(files[0], names[0]);
+  add("j", "Сохранил " + names.length + " из " + files.length + ". Всего в библиотеке: " + avNames.length + ". " +
+    (failed.length ? "Не получилось: " + failed.join(", ") + ". " : "") +
+    "Список — «какие модели», переключение — «модель 3» или по имени.");
 };
 function avCreditFor(name){
   return /スリクオ|suriku/i.test(name) ? AV_CREDIT : "Модель: " + name;
@@ -1712,6 +1708,51 @@ function avFrame(){
   av.cam.lookAt(ctr.x, focusY, ctr.z);
   av.cam.updateProjectionMatrix();
 }
+function avRect(sel){
+  const e = document.querySelector(sel);
+  return e ? e.getBoundingClientRect() : null;
+}
+function avFreeSpot(){
+  const bad = ["#chat", "#bar", "header"].map(avRect).filter(Boolean);
+  const W = window.innerWidth, H = window.innerHeight;
+  for(let i = 0; i < 80; i++){
+    const x = Math.random() * (W - 210) + 5;
+    const y = 60 + Math.random() * Math.max(20, H - 400);
+    const r = {left: x, top: y, right: x + 200, bottom: y + 320};
+    const hit = bad.some(b => !(r.right < b.left || r.left > b.right || r.bottom < b.top || r.top > b.bottom));
+    if(!hit) return {x, y};
+  }
+  return null;
+}
+function avWalkFloat(dt){
+  if(avDrag){
+    av.fx = parseFloat(avDiv.style.left) || 0;
+    av.fy = parseFloat(avDiv.style.top) || 0;
+    av.walkMoving = false;
+    return;
+  }
+  if(av.fx === undefined){
+    av.fx = window.innerWidth - 220; av.fy = window.innerHeight - 340;
+    av.fg = null; av.fwait = 1; av.fdir = 1;
+  }
+  av.walkMoving = false;
+  if(av.fwait > 0){ av.fwait -= dt; }
+  else if(!av.fg){ av.fg = avFreeSpot(); if(!av.fg) av.fwait = 2; }
+  if(av.fg && av.fwait <= 0){
+    const dx = av.fg.x - av.fx, dy = av.fg.y - av.fy, d = Math.hypot(dx, dy);
+    if(d < 3){ av.fg = null; av.fwait = 1.5 + Math.random() * 2.5; }
+    else{
+      const s = Math.min(d, 85 * dt);
+      av.fx += dx / d * s; av.fy += dy / d * s;
+      av.walkMoving = true;
+      if(Math.abs(dx) > 1) av.fdir = dx < 0 ? -1 : 1;
+    }
+  }
+  const bob = av.walkMoving ? Math.abs(Math.sin(av.t * 9)) * 4 : 0;
+  avDiv.style.left = av.fx + "px";
+  avDiv.style.top = (av.fy - bob) + "px";
+  avDiv.style.transform = "scaleX(" + (av.fdir || 1) + ")";
+}
 function avResize(){
   if(!av || !av.renderer) return;
   const w = avDiv.clientWidth, h = avDiv.clientHeight;
@@ -1731,7 +1772,8 @@ function avFloat(on){
     av.nextRoam = av.t + 1;
     if(!avOn){ avOn = true; sv("javatar", true); $("avb").classList.add("on"); }
   }else{
-    avDiv.style.left = ""; avDiv.style.top = "";
+    avDiv.style.left = ""; avDiv.style.top = ""; avDiv.style.transform = "";
+    if(av) av.fx = undefined;
   }
   avFrame();
   setTimeout(avResize, 80);
@@ -1846,6 +1888,12 @@ liveStop = function(...a){
 };
 
 document.body.classList.add("clean");
+{
+  const cb = document.createElement("button");
+  cb.id = "credit"; cb.className = "k"; cb.title = "Авторы модели"; cb.textContent = "ⓘ";
+  cb.onclick = () => { const n = ld("jvrmname", ""); alert(n ? avCreditFor(n) : "Модель ещё не выбрана."); };
+  $("kb").before(cb);
+}
 document.addEventListener("click", () => { if(hf && rec && !listening) listen(); }, {once: true});
 // ---------- HUD ----------
 function getOutAn(){
@@ -1930,7 +1978,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v42", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v43", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2353,7 +2401,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v42."
-  : "Приветствую, " + uname + ". Я Джарвис v42. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v43."
+  : "Приветствую, " + uname + ". Я Джарвис v43. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
