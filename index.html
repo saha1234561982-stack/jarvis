@@ -1220,11 +1220,7 @@ const AV_VRM_URLS = [
 function avFindVrm(){
   const roots = [window.THREE_VRM, window.VRM, window.three_vrm].filter(Boolean);
   for(const r of roots){
-    if(r.VRMLoaderPlugin) return r;
-    for(const k of Object.keys(r)){
-      const v = r[k];
-      if(v && typeof v === "object" && v.VRMLoaderPlugin) return v;
-    }
+    if(r.VRMImporter || r.VRMLoaderPlugin) return r;
   }
   return null;
 }
@@ -1232,7 +1228,7 @@ function avLibs(){
   if(!avLibsP) avLibsP = (async () => {
     if(typeof THREE === "undefined") await loadScript(AV_CDN.three);
     if(!THREE.GLTFLoader) await loadScript(AV_CDN.gltf);
-    if(!THREE.VRMLoaderPlugin){
+    if(!THREE.VRMImporter && !THREE.VRMLoaderPlugin){
       let lib = avFindVrm();
       for(const u of AV_VRM_URLS){
         if(lib) break;
@@ -1240,14 +1236,14 @@ function avLibs(){
         lib = avFindVrm();
       }
       if(!lib){
-        const inner = window.THREE_VRM ? Object.keys(window.THREE_VRM).slice(0, 25).join(", ") : "нет THREE_VRM";
-        throw new Error("VRM: класс не найден, внутри: " + inner);
+        throw new Error("библиотека VRM не подключилась");
       }
+      THREE.VRMImporter = lib.VRMImporter;
       THREE.VRMLoaderPlugin = lib.VRMLoaderPlugin;
-      THREE.VRMSchema = lib.VRMSchema || (lib.VRM && lib.VRM.VRMSchema);
-      THREE.VRMUtils = lib.VRMUtils;
+      THREE.VRMSchema = lib.VRMSchema;
     }
     if(!THREE.VRMSchema) throw new Error("у библиотеки VRM нет VRMSchema");
+    if(!THREE.VRMImporter && !THREE.VRMLoaderPlugin) throw new Error("в библиотеке нет загрузчика VRM");
   })().catch(e => { avLibsP = null; throw e; });
   return avLibsP;
 }
@@ -1309,10 +1305,14 @@ avFile.onchange = async () => {
     if(!av) avInit();
     const url = URL.createObjectURL(f);
     const loader = new THREE.GLTFLoader();
-    loader.register(parser => new THREE.VRMLoaderPlugin(parser));
+    if(THREE.VRMLoaderPlugin) loader.register(parser => new THREE.VRMLoaderPlugin(parser));
     const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
     URL.revokeObjectURL(url);
-    const vrm = gltf.userData && gltf.userData.vrm;
+    let vrm = gltf.userData && gltf.userData.vrm;
+    if(!vrm && THREE.VRMImporter){
+      const imp = new THREE.VRMImporter();
+      vrm = await imp.import(gltf);
+    }
     if(!vrm) throw new Error("это не VRM-модель (файл .vrm)");
     vrm.scene.rotation.y = Math.PI;
     if(av.vrm) av.scene.remove(av.vrm.scene);
@@ -1423,7 +1423,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v24", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v25", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1842,7 +1842,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v24."
-  : "Приветствую, " + uname + ". Я Джарвис v24. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v25."
+  : "Приветствую, " + uname + ". Я Джарвис v25. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
