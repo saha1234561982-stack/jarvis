@@ -1121,6 +1121,19 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(какие модели|мои модели|список моделей)$/i.test(x)){
+    idbNames().then(ns => add("j", ns.length ? "Модели: " + ns.map((n, i) => (i + 1) + ". " + n).join("; ") + "." : "Моделей пока нет. Нажми 📂 и выбери все .vrm сразу."));
+    return "Смотрю библиотеку…";
+  }
+  const mm = x.match(/^(?:модель|смени модель|смени на|надень|переоденься в)\s+(.+)$/i);
+  if(mm){
+    const nm = avFindName(mm[1]);
+    if(nm){
+      if(!avOn) avSet(true);
+      avSwitchTo(nm).then(ok => add("j", ok ? "Переодеваюсь: " + nm + "." : "Не получилось загрузить модель."));
+      return "Переодеваюсь: " + nm + "…";
+    }
+  }
   const g0 = x.split(" ").length <= 4 ? gestureOf(x) : null;
   if(g0){ avDo(g0); return ACT_LABEL[g0]; }
   if(/помаш|машешь|махни/i.test(x)){ avDo("wave"); return "Машу!"; }
@@ -1205,7 +1218,7 @@ avDiv.innerHTML = '<div id="avmsg"><span id="avtxt">Выбери модель .v
 avDiv.appendChild(avCap);
 $("chat").before(avDiv);
 const avFile = document.createElement("input");
-avFile.type = "file"; avFile.accept = ".vrm,.glb,.gltf"; avFile.hidden = true;
+avFile.type = "file"; avFile.accept = ".vrm,.glb,.gltf"; avFile.hidden = true; avFile.multiple = true;
 document.body.appendChild(avFile);
 $("avpick").onclick = () => avFile.click();
 let avOn = ld("javatar", false);
@@ -1424,10 +1437,27 @@ function avLoop(){
   av.raf = requestAnimationFrame(avLoop);
 }
 avFile.onchange = async () => {
-  const f = avFile.files && avFile.files[0];
+  const files = Array.from(avFile.files || []);
   avFile.value = "";
-  if(!f) return;
-  avMsg("Загружаю модель " + f.name + "…", true);
+  if(!files.length) return;
+  const names = [];
+  for(const f of files){
+    const name = f.name.replace(/\.(vrm|glb|gltf)$/i, "");
+    await idbPut(name, f);
+    names.push(name);
+  }
+  await idbNames();
+  sv("jvrmname", names[0]);
+  await avLoadBlob(files[0], names[0]);
+  add("j", names.length > 1
+    ? "Сохранил моделей: " + names.length + " (" + names.map((n, i) => (i + 1) + ". " + n).join(", ") + "). Меняй словом: «модель 2» или «модель " + names[1] + "»."
+    : "Сохранил модель «" + names[0] + "». Меняй словом: «модель " + names[0] + "».");
+};
+function avCreditFor(name){
+  return /スリクオ|suriku/i.test(name) ? AV_CREDIT : "Модель: " + name;
+}
+async function avLoadBlob(f, name){
+  avMsg("Загружаю модель " + name + "…", true);
   try{
     await avLibs();
     if(!av) avInit();
@@ -1462,12 +1492,54 @@ avFile.onchange = async () => {
     avPose(vrm);
     avSetupLife(vrm);
     avMsg("", false);
+    avCap.textContent = avCreditFor(name);
     avCap.style.display = "block";
     if(!av.raf) avLoop();
+    return true;
   }catch(e){
     avMsg("Не получилось: " + e.message, true);
+    return false;
   }
-};
+}
+let avDB = null, avNames = [];
+function idbOpen(){
+  if(avDB) return Promise.resolve(avDB);
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("jarvis-vrm", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("m");
+    r.onsuccess = () => { avDB = r.result; res(avDB); };
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbTx(mode, fn){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("m", mode);
+    const req = fn(tx.objectStore("m"));
+    tx.oncomplete = () => res(req ? req.result : undefined);
+    tx.onerror = () => rej(tx.error);
+  });
+}
+const idbPut = (name, blob) => idbTx("readwrite", st => st.put(blob, name));
+const idbGet = name => idbTx("readonly", st => st.get(name));
+function idbNames(){ return idbTx("readonly", st => st.getAllKeys()).then(ns => (avNames = (ns || []).map(String))); }
+function avFindName(q){
+  const low = String(q).toLowerCase().trim();
+  if(/^\d+$/.test(low)) return avNames[parseInt(low, 10) - 1] || null;
+  return avNames.find(n => n.toLowerCase() === low)
+    || avNames.find(n => n.toLowerCase().includes(low))
+    || avNames.find(n => low.includes(n.toLowerCase())) || null;
+}
+async function avSwitchTo(name){
+  const blob = await idbGet(name);
+  if(!blob) return false;
+  sv("jvrmname", name);
+  return avLoadBlob(blob, name);
+}
+function avAutoLoad(){
+  const name = ld("jvrmname", null);
+  if(name) idbGet(name).then(b => { if(b) avLoadBlob(b, name); }).catch(() => {});
+}
 let avLiveShown = false;
 let av_rig = [];
 function avPose(vrm){
@@ -1731,6 +1803,7 @@ function avSet(on){
   avLibs().then(() => {
     if(!av) avInit();
     if(!av.raf) avLoop();
+    if(!av.vrm) avAutoLoad();
   }).catch(e => avMsg("3D не загрузилось: " + e.message + ". Проверь интернет и нажми 🧑 ещё раз.", true));
 }
 const avb = document.createElement("button");
@@ -1738,13 +1811,14 @@ avb.id = "avb"; avb.className = "k"; avb.title = "3D-персонаж"; avb.text
 avb.onclick = () => avSet(!avOn);
 $("clr").before(avb);
 if(avOn) avSet(true);
+idbNames().catch(() => {});
 
 // ---------- персонаж в живом разговоре ----------
 const _liveStartOrig = liveStart;
 liveStart = async function(...a){
   if(!avOn){
     avDiv.classList.add("on"); avLiveShown = true; avRainKick();
-    avLibs().then(() => { if(!av) avInit(); if(!av.raf) avLoop(); }).catch(() => {});
+    avLibs().then(() => { if(!av) avInit(); if(!av.raf) avLoop(); if(!av.vrm) avAutoLoad(); }).catch(() => {});
   }
   const r = _liveStartOrig.apply(this, a);
   setTimeout(() => avDo("wave"), 600);
@@ -1839,7 +1913,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v39", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v40", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2262,7 +2336,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v39."
-  : "Приветствую, " + uname + ". Я Джарвис v39. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v40."
+  : "Приветствую, " + uname + ". Я Джарвис v40. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
