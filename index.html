@@ -1213,12 +1213,37 @@ function loadScript(src){
   });
 }
 let avLibsP = null;
+const AV_VRM_URLS = [
+  "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.11/lib/three-vrm.js",
+  "https://unpkg.com/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"
+];
+function avFindVrm(){
+  const cands = [window.THREE, window.THREE_VRM, window.VRM, window.three_vrm];
+  for(const c of cands){
+    if(c && c.VRMLoaderPlugin) return c;
+  }
+  return null;
+}
 function avLibs(){
   if(!avLibsP) avLibsP = (async () => {
     if(typeof THREE === "undefined") await loadScript(AV_CDN.three);
     if(!THREE.GLTFLoader) await loadScript(AV_CDN.gltf);
-    if(!THREE.VRMLoaderPlugin) await loadScript(AV_CDN.vrm);
-    if(!THREE.VRMLoaderPlugin) throw new Error("библиотека VRM не подключилась");
+    if(!THREE.VRMLoaderPlugin){
+      let lib = avFindVrm();
+      for(const u of AV_VRM_URLS){
+        if(lib) break;
+        try{ await loadScript(u); }catch(e){ continue; }
+        lib = avFindVrm();
+      }
+      if(!lib){
+        const names = Object.keys(window).filter(k => /vrm/i.test(k)).join(", ") || "ничего";
+        throw new Error("библиотека VRM не подключилась (нашлось: " + names + ")");
+      }
+      THREE.VRMLoaderPlugin = lib.VRMLoaderPlugin;
+      THREE.VRMSchema = lib.VRMSchema || (lib.VRM && lib.VRM.VRMSchema);
+      THREE.VRMUtils = lib.VRMUtils;
+    }
+    if(!THREE.VRMSchema) throw new Error("у библиотеки VRM нет VRMSchema");
   })().catch(e => { avLibsP = null; throw e; });
   return avLibsP;
 }
@@ -1394,7 +1419,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v22", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v23", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1813,7 +1838,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v22."
-  : "Приветствую, " + uname + ". Я Джарвис v22. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v23."
+  : "Приветствую, " + uname + ". Я Джарвис v23. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
