@@ -1377,7 +1377,7 @@ function avLoop(){
       sc.rotation.y += ((Math.PI + av.goalRy) - sc.rotation.y) * 0.05;
     }
     (av.legs || []).forEach((lg, i) => {
-      if(!lg) return;
+      if(!lg || av.sitK > 0.01 || av.lieK > 0.01) return;
       const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.4 : 0;
       lg.rotation.x += (tgt - lg.rotation.x) * 0.2;
     });
@@ -1454,6 +1454,9 @@ function avLoop(){
       if(av.hips) av.hips.position.y += ((av.hipsY - 0.5 * av.sitK) - av.hips.position.y) * 0.15;
     }
     brainTick(dt);
+    if(!(av.prone && av.lieK > 0.3) && av.sitK < 0.01){
+      (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (0 - lg.rotation.x) * 0.2; });
+    }
     if(av.prone && av.lieK > 0.3){
       const kick = Math.sin(av.t * 3) * 0.25;
       (av.legs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((-0.2 + (i ? kick : -kick)) - lg.rotation.x) * 0.2; });
@@ -2092,7 +2095,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v50", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v51", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2516,7 +2519,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v50."
-  : "Приветствую, " + uname + ". Я Джарвис v50. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v51."
+  : "Приветствую, " + uname + ". Я Джарвис v51. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
