@@ -1130,6 +1130,9 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(как ты|что чувствуешь|настроение|как себя чувствуешь)$/i.test(x)){
+    return "Я " + brainMood() + ". Энергии " + Math.round(brain.energy * 100) + "%.";
+  }
   if(/^(очисти|очистить|удали|сотри)\s+(чат|экран|надписи|сообщения|всё|все)$/i.test(x)){
     $("chat").innerHTML = ""; hist = []; sv("jhist", hist);
     return "Чат очищен.";
@@ -1434,7 +1437,7 @@ function avLoop(){
       av.stumTilt = tilt;
     }
     av.lieK = (av.lieK || 0) + ((av.lying ? 1 : 0) - (av.lieK || 0)) * 0.06;
-    sc.rotation.x = av.lieK > 0.01 ? -1.45 * av.lieK : 0;
+    sc.rotation.x = av.lieK > 0.01 ? (av.prone ? 1.45 : -1.45) * av.lieK : 0;
     if(av.lyingUntil && av.t > av.lyingUntil){ av.lying = false; av.lyingUntil = null; }
     if(av.sitUntil && av.t > av.sitUntil){ av.sitting = false; av.sitUntil = null; }
     if(av.blushMats && av.blushMats.length){
@@ -1448,9 +1451,15 @@ function avLoop(){
       (av.lowLegs || []).forEach(lg => { if(lg) lg.rotation.x += (2.4 * av.sitK - lg.rotation.x) * 0.15; });
       sc.position.y += (-0.75 * av.sitK - sc.position.y) * 0.15;
     }
+    brainTick(dt);
+    if(av.prone && av.lieK > 0.3){
+      const kick = Math.sin(av.t * 3) * 0.25;
+      (av.legs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((-0.2 + (i ? kick : -kick)) - lg.rotation.x) * 0.2; });
+      (av.lowLegs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((2.2 + (i ? -kick : kick)) - lg.rotation.x) * 0.2; });
+    }
     if(av.floating) avWalkFloat(dt);
     if(av.earT > 0) av.earT -= dt;
-    if(av.auto && !speaking && !live && av.t > av.nextAct){
+    if(false && av.auto && !speaking && !live && av.t > av.nextAct){
       const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "joy", "fun", "surprised", "cute", "stumble", "jump", "bow", "spin", "dance", "lie", "sit", "fall"];
       const pick = acts[Math.floor(Math.random() * acts.length)];
       avDo(pick);
@@ -1648,7 +1657,39 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
-const ACT_LABEL = {lie: "Ложусь.", fall: "Ой-ой! Падаю!", sit: "Сажусь.", stand: "Встаю.", spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+const ACT_LABEL = {lieFront: "Ложусь на живот и болтаю ногами.", lie: "Ложусь.", fall: "Ой-ой! Падаю!", sit: "Сажусь.", stand: "Встаю.", spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+// ---------- мозговой центр: энергия, скука, настроение, решения ----------
+const brain = {energy: 0.8, boredom: 0, lastUser: -999, lastTalk: -999, nextDecision: 0};
+const BRAIN_TALK = ["Майки, ты тут?", "Мне скучно без тебя…", "Может, поболтаем?", "Я немного устала, но я рядом."];
+function brainMood(){
+  if(brain.energy < 0.25) return "устала";
+  if(brain.boredom > 0.6) return "скучаю";
+  if(avEmo.name === "cute" || avEmo.name === "joy") return "в хорошем настроении";
+  return "спокойна";
+}
+function brainTick(dt){
+  if(!av) return;
+  const idle = !(av.lying || av.sitting);
+  brain.energy = Math.max(0, Math.min(1, brain.energy + (idle ? -0.012 : 0.03) * dt));
+  if(av.t - brain.lastUser > 20) brain.boredom = Math.min(1, brain.boredom + 0.02 * dt);
+  if(av.t < brain.nextDecision) return;
+  brain.nextDecision = av.t + 4 + Math.random() * 5;
+  if(!av.auto || speaking || busy || live) return;
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  if(!idle){ if(brain.energy > 0.8) avDo("stand"); return; }
+  if(brain.energy < 0.25){ avDo(Math.random() < 0.6 ? "lie" : "sit"); return; }
+  if(brain.boredom > 0.6){
+    avDo(pick(["dance", "spin", "jump", "stumble", "cute", "fall", "lieFront"]));
+    brain.boredom = 0.25;
+    if(av.t - brain.lastTalk > 120 && Math.random() < 0.5){
+      brain.lastTalk = av.t;
+      const line = pick(BRAIN_TALK);
+      add("j", line); say(line);
+    }
+    return;
+  }
+  avDo(pick(["wave", "nod", "ears", "left", "right", "front", "back", "turnL", "turnR", "bow", "joy", "fun", "surprised"]));
+}
 function gestureOf(t){
   if(!t) return null;
   const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
@@ -1667,6 +1708,7 @@ function gestureOf(t){
   if(has(["руки"]) && has(["вниз"])) return "armsDown";
   if(has(["хлопай", "хлопни"])) return "clap";
   if(has(["укажи"])) return "point";
+  if(words.some(w => ["ляг", "ложись"].includes(w)) && has(["живот"])) return "lieFront";
   if(words.some(w => ["ляг", "ложись", "спи", "спать", "отдохни"].includes(w))) return "lie";
   if(has(["падай", "упади"])) return "fall";
   if(has(["споткн", "упад"])) return "stumble";
@@ -1714,7 +1756,8 @@ function avDoAct(name){
   if(name === "come"){ if(av.floating) avFloat(false); avWalkTo(0, 0.3, 0); return; }
   if(name === "dance"){ av.dance = 7; return; }
   if(name === "sit"){ av.sitting = true; av.lying = false; return; }
-  if(name === "lie"){ av.lying = true; av.lyingUntil = null; av.sitting = false; return; }
+  if(name === "lie"){ av.lying = true; av.prone = false; av.lyingUntil = null; av.sitting = false; return; }
+  if(name === "lieFront"){ av.lying = true; av.prone = true; av.lyingUntil = null; av.sitting = false; return; }
   if(name === "fall"){ av.stum = 2.4; av.stumBig = true; av.stumDir = Math.random() < 0.5 ? 1 : -1; avEmote("surprised", 1.5); return; }
   if(name === "stand"){ av.sitting = false; av.lying = false; av.lyingUntil = null; av.sitUntil = null; return; }
   if(name === "armsUp"){ av.pose = {mode: "up", t: 4}; return; }
@@ -2026,7 +2069,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v47", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v48", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2307,6 +2350,7 @@ function argsShort(a){
 }
 
 async function send(text, photo, chain){
+  if(av){ brain.lastUser = av.t; brain.boredom = 0; }
   text = (text || "").trim();
   if(live){
     const g = gestureOf(text);
@@ -2449,7 +2493,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v47."
-  : "Приветствую, " + uname + ". Я Джарвис v47. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v48."
+  : "Приветствую, " + uname + ". Я Джарвис v48. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
