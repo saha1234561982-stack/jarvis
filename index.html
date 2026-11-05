@@ -1279,7 +1279,7 @@ function avLoop(){
   if(av.vrm){
     const bp = av.vrm.blendShapeProxy;
     const P = THREE.VRMSchema.BlendShapePresetName;
-    if(av.t > av.blinkAt && av.blinkT < 0){ av.blinkT = 0; av.blinkAt = av.t + 3 + Math.random() * 2; }
+    if(av.t > av.blinkAt && av.blinkT < 0){ av.blinkT = 0; av.blinkAt = av.t + (Math.random() < 0.2 ? 0.9 : 2.2 + Math.random() * 3.8); }
     let b = 0;
     if(av.blinkT >= 0){
       av.blinkT += dt;
@@ -1310,7 +1310,23 @@ function avLoop(){
     r.u.rotation.z = r.cur;
     if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : 0;
   });
-  if(av.head) av.head.rotation.x = nodOff;
+  if(!(av.gzAt > 0) || av.t > av.gzAt){
+    av.gx = (Math.random() - 0.5) * 0.4;
+    av.gy = (Math.random() - 0.5) * 0.14;
+    av.gzAt = av.t + 1.2 + Math.random() * 2.8;
+  }
+  av.hx = (av.hx || 0) + ((av.gx || 0) - (av.hx || 0)) * 0.04;
+  av.hy = (av.hy || 0) + ((av.gy || 0) - (av.hy || 0)) * 0.04;
+  if(av.head){
+    av.head.rotation.x = nodOff + av.hy + Math.sin(av.t * 0.7) * 0.02 + av.mouth * 0.04 * Math.sin(av.t * 5);
+    av.head.rotation.y = av.hx;
+    av.head.rotation.z = Math.sin(av.t * 0.45) * 0.025;
+  }
+  if(av.vrm && av.vrm.humanoid){
+    if(!av.chest) av.chest = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Chest) || av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || false;
+    if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018;
+  }
+  if(av.vrm) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008;
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -1391,7 +1407,8 @@ function avEmoApply(bp, P, dt){
   Object.keys(AV_EMO).forEach(k => {
     const key = AV_EMO[k];
     if(!P[key]) return;
-    const goal = (avEmo.name === k && avEmo.t > 0) ? 0.85 : 0;
+    const base = (k === "joy" && !avEmo.name) ? 0.12 : 0;
+    const goal = (avEmo.name === k && avEmo.t > 0) ? 0.85 : base;
     avEmoW[k] = (avEmoW[k] || 0) + (goal - (avEmoW[k] || 0)) * 0.15;
     bp.setValue(P[key], Math.max(0, Math.min(1, avEmoW[k])));
   });
@@ -1557,7 +1574,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v32", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v33", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1980,7 +1997,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v32."
-  : "Приветствую, " + uname + ". Я Джарвис v32. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v33."
+  : "Приветствую, " + uname + ". Я Джарвис v33. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
