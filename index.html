@@ -69,6 +69,12 @@ body.hud #sub{display:block}
 #lib .lb{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 #lib .lb button{width:auto;height:auto;border-radius:8px;padding:6px 8px;font-size:14px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
 #libl{color:#00b32c;font-size:14px;padding-top:8px}
+#av{height:260px;display:none;background:#000;border-bottom:1px solid #0a4d1a;position:relative}
+#av.on{display:block}
+#av canvas{display:block;width:100%;height:100%}
+#avmsg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:13px;color:#00b32c;text-align:center;padding:12px}
+#avmsg button{border-radius:20px;width:auto;height:auto;padding:8px 14px;font-size:14px;background:#00ff41;color:#000}
+#avcap{position:absolute;left:0;right:0;bottom:0;padding:4px 8px;font-size:10px;line-height:1.3;color:#00b32c;background:rgba(0,0,0,.7);text-align:center;display:none}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -1177,6 +1183,134 @@ libb.className = "k"; libb.title = "Мои приложения"; libb.textConte
 libb.onclick = openLib;
 $("clr").before(libb);
 
+// ---------- 3D-аватар: готовая модель VRM ----------
+const avDiv = document.createElement("div");
+avDiv.id = "av";
+const AV_CREDIT = "Модель: スリクオちゃん · автор: 人並 (Hitonami) · VRoid Hub · использование разрешено автором, нужно указание автора";
+const avCap = document.createElement("div");
+avCap.id = "avcap";
+avCap.textContent = AV_CREDIT;
+avDiv.innerHTML = '<div id="avmsg"><span id="avtxt">Выбери модель .vrm (кнопка ниже)</span><button id="avpick">📂 Выбрать модель</button></div>';
+avDiv.appendChild(avCap);
+$("chat").before(avDiv);
+const avFile = document.createElement("input");
+avFile.type = "file"; avFile.accept = ".vrm,.glb,.gltf"; avFile.hidden = true;
+document.body.appendChild(avFile);
+$("avpick").onclick = () => avFile.click();
+let avOn = ld("javatar", false);
+let av = null;
+const AV_CDN = {
+  three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+  gltf: "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js",
+  vrm: "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"
+};
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res;
+    s.onerror = () => rej(new Error("не загрузилась библиотека " + src.split("/").pop()));
+    document.head.appendChild(s);
+  });
+}
+let avLibsP = null;
+function avLibs(){
+  if(!avLibsP) avLibsP = (async () => {
+    if(typeof THREE === "undefined") await loadScript(AV_CDN.three);
+    if(!THREE.GLTFLoader) await loadScript(AV_CDN.gltf);
+    if(!THREE.VRMLoaderPlugin) await loadScript(AV_CDN.vrm);
+    if(!THREE.VRMLoaderPlugin) throw new Error("библиотека VRM не подключилась");
+  })().catch(e => { avLibsP = null; throw e; });
+  return avLibsP;
+}
+function avMsg(text, show){
+  $("avtxt").textContent = text;
+  $("avmsg").style.display = show ? "flex" : "none";
+}
+function avInit(){
+  const W = avDiv.clientWidth || 360, H = avDiv.clientHeight || 260;
+  const renderer = new THREE.WebGLRenderer({antialias: true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(W, H);
+  renderer.setClearColor(0x000000, 1);
+  avDiv.insertBefore(renderer.domElement, $("avmsg"));
+  const scene = new THREE.Scene();
+  const cam = new THREE.PerspectiveCamera(25, W / H, 0.1, 20);
+  cam.position.set(0, 1.35, 2.6); cam.lookAt(0, 1.2, 0);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const d = new THREE.DirectionalLight(0xffffff, 0.8); d.position.set(1, 2, 2); scene.add(d);
+  const rim = new THREE.DirectionalLight(0x44ff88, 0.6); rim.position.set(-2, 2, -2); scene.add(rim);
+  av = {renderer, scene, cam, vrm: null, t: 0, blinkAt: 2, blinkT: -1, mouth: 0, last: performance.now(), raf: null};
+}
+function avLoop(){
+  if(!av) return;
+  if(!avOn){ av.raf = null; return; }
+  const now = performance.now();
+  const dt = Math.min((now - av.last) / 1000, 0.1);
+  av.last = now; av.t += dt;
+  if(av.vrm){
+    const bp = av.vrm.blendShapeProxy;
+    const P = THREE.VRMSchema.BlendShapePresetName;
+    if(av.t > av.blinkAt && av.blinkT < 0){ av.blinkT = 0; av.blinkAt = av.t + 3 + Math.random() * 2; }
+    let b = 0;
+    if(av.blinkT >= 0){
+      av.blinkT += dt;
+      const k = av.blinkT / 0.14;
+      b = k < 0.5 ? k * 2 : 2 - k * 2;
+      if(av.blinkT > 0.14){ av.blinkT = -1; b = 0; }
+    }
+    const target = speaking ? 0.2 + 0.8 * Math.abs(Math.sin(av.t * 16)) : 0;
+    av.mouth += (target - av.mouth) * 0.35;
+    if(bp){
+      bp.setValue(P.Blink, Math.max(0, Math.min(1, b)));
+      bp.setValue(P.A, av.mouth);
+      if(bp.update) bp.update();
+    }
+    av.vrm.update(dt);
+  }
+  av.renderer.render(av.scene, av.cam);
+  av.raf = requestAnimationFrame(avLoop);
+}
+avFile.onchange = async () => {
+  const f = avFile.files && avFile.files[0];
+  avFile.value = "";
+  if(!f) return;
+  avMsg("Загружаю модель " + f.name + "…", true);
+  try{
+    await avLibs();
+    if(!av) avInit();
+    const url = URL.createObjectURL(f);
+    const loader = new THREE.GLTFLoader();
+    loader.register(parser => new THREE.VRMLoaderPlugin(parser));
+    const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
+    URL.revokeObjectURL(url);
+    const vrm = gltf.userData && gltf.userData.vrm;
+    if(!vrm) throw new Error("это не VRM-модель (файл .vrm)");
+    vrm.scene.rotation.y = Math.PI;
+    if(av.vrm) av.scene.remove(av.vrm.scene);
+    av.vrm = vrm; av.scene.add(vrm.scene);
+    avMsg("", false);
+    avCap.style.display = "block";
+    if(!av.raf) avLoop();
+  }catch(e){
+    avMsg("Не получилось: " + e.message, true);
+  }
+};
+function avSet(on){
+  avOn = on; sv("javatar", on);
+  avDiv.classList.toggle("on", on);
+  $("avb").classList.toggle("on", on);
+  if(!on) return;
+  avLibs().then(() => {
+    if(!av) avInit();
+    if(!av.raf) avLoop();
+  }).catch(e => avMsg("3D не загрузилось: " + e.message + ". Проверь интернет и нажми 🧑 ещё раз.", true));
+}
+const avb = document.createElement("button");
+avb.id = "avb"; avb.className = "k"; avb.title = "3D-персонаж"; avb.textContent = "🧑";
+avb.onclick = () => avSet(!avOn);
+$("clr").before(avb);
+if(avOn) avSet(true);
+
 // ---------- HUD ----------
 function getOutAn(){
   actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -1260,7 +1394,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v19", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v22", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1679,7 +1813,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v19."
-  : "Приветствую, " + uname + ". Я Джарвис v19. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v22."
+  : "Приветствую, " + uname + ". Я Джарвис v22. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
