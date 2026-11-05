@@ -1116,6 +1116,8 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/помаш|машешь|махни/i.test(x)){ avDo("wave"); return "Машу!"; }
+  if(/кивни|кивай/i.test(x)){ avDo("nod"); return "Киваю."; }
   let m = x.match(/^(?:когда я (?:говорю|скажу)|если я (?:говорю|скажу))\s+[«"]?(.+?)[»"]?\s*[,:—–-]\s*(.+)$/i);
   if(m){
     const phrase = m[1].trim();
@@ -1283,8 +1285,10 @@ function avLoop(){
       b = k < 0.5 ? k * 2 : 2 - k * 2;
       if(av.blinkT > 0.14){ av.blinkT = -1; b = 0; }
     }
-    const target = speaking ? 0.2 + 0.8 * Math.abs(Math.sin(av.t * 16)) : 0;
-    av.mouth += (target - av.mouth) * 0.35;
+    const level = Math.min(1, rmsOf(typeof outAn !== "undefined" ? outAn : null) * 6);
+    const target = level > 0.04 ? level : (speaking ? 0.2 + 0.8 * Math.abs(Math.sin(av.t * 16)) : 0);
+    av.mouth += (target - av.mouth) * 0.5;
+    if(!av.head && av.vrm.humanoid){ av.head = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Head) || null; }
     if(bp){
       bp.setValue(P.Blink, Math.max(0, Math.min(1, b)));
       bp.setValue(P.A, av.mouth);
@@ -1292,6 +1296,18 @@ function avLoop(){
     }
     av.vrm.update(dt);
   }
+  if(av.wave > 0) av.wave -= dt;
+  if(av.nod > 0) av.nod -= dt;
+  const nodOff = av.nod > 0 ? Math.sin((1 - av.nod) * Math.PI * 2) * 0.12 : 0;
+  av_rig.forEach((r, i) => {
+    const waving = av.wave > 0 && i === 1;
+    const sway = Math.sin(av.t * 0.9 + i * 1.7) * 0.04;
+    const goal = waving ? -r.base * 0.85 : r.base + sway;
+    r.cur += (goal - r.cur) * 0.12;
+    r.u.rotation.z = r.cur;
+    if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : 0;
+  });
+  if(av.head) av.head.rotation.x = nodOff;
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -1338,21 +1354,36 @@ avFile.onchange = async () => {
   }
 };
 let avLiveShown = false;
+let av_rig = [];
 function avPose(vrm){
   try{
     const h = vrm.humanoid; if(!h || !THREE.VRMSchema) return;
     const B = THREE.VRMSchema.HumanoidBoneName;
     const hips = h.getBoneNode(B.Hips);
     if(!hips) return;
+    const V = () => new THREE.Vector3();
+    const pick = (name) => h.getBoneNode(B[name]);
     vrm.scene.updateMatrixWorld(true);
-    const hx = hips.getWorldPosition(new THREE.Vector3()).x;
-    ["LeftUpperArm", "RightUpperArm"].forEach(name => {
-      const n = h.getBoneNode(B[name]);
-      if(!n) return;
-      const side = Math.sign(n.getWorldPosition(new THREE.Vector3()).x - hx) || 1;
-      n.rotation.z = -side * 1.15;
+    const hx = hips.getWorldPosition(V()).x;
+    av_rig = [];
+    [["LeftUpperArm", "LeftLowerArm", "LeftHand"], ["RightUpperArm", "RightLowerArm", "RightHand"]].forEach(([up, low, hand]) => {
+      const u = pick(up), l = pick(low), hn = pick(hand);
+      if(!u) return;
+      const side = Math.sign(u.getWorldPosition(V()).x - hx) || 1;
+      u.rotation.z = side * 1.15;
+      vrm.scene.updateMatrixWorld(true);
+      if(hn && hn.getWorldPosition(V()).y > u.getWorldPosition(V()).y){
+        u.rotation.z = -side * 1.15;
+        vrm.scene.updateMatrixWorld(true);
+      }
+      av_rig.push({u, l, base: u.rotation.z, cur: u.rotation.z});
     });
   }catch(e){}
+}
+function avDo(name){
+  if(!av) return;
+  if(name === "wave") av.wave = 2.8;
+  if(name === "nod") av.nod = 1.0;
 }
 function avSet(on){
   avOn = on; sv("javatar", on);
@@ -1377,7 +1408,9 @@ liveStart = async function(...a){
     avDiv.classList.add("on"); avLiveShown = true;
     avLibs().then(() => { if(!av) avInit(); if(!av.raf) avLoop(); }).catch(() => {});
   }
-  return _liveStartOrig.apply(this, a);
+  const r = _liveStartOrig.apply(this, a);
+  setTimeout(() => avDo("wave"), 600);
+  return r;
 };
 const _liveStopOrig = liveStop;
 liveStop = function(...a){
@@ -1468,7 +1501,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v28", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v30", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1887,7 +1920,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v28."
-  : "Приветствую, " + uname + ". Я Джарвис v28. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v30."
+  : "Приветствую, " + uname + ". Я Джарвис v30. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
