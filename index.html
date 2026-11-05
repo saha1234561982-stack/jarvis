@@ -1351,6 +1351,17 @@ function avLoop(){
     }else{
       sc.position.y += (0 - sc.position.y) * 0.2;
     }
+    if(moving && !(av.stum > 0) && Math.random() < 0.0008) avDo("stumble");
+    if(av.stum > 0){
+      av.stum -= dt;
+      const p = 1 - Math.max(0, av.stum) / 1.2;
+      const tilt = Math.sin(p * Math.PI) * 0.25 * (av.stumDir || 1);
+      const flail = Math.sin(av.t * 22) * 0.7;
+      av_rig.forEach((r, i) => { const tgt = (i ? -1 : 1) * (0.6 + flail); r.cur = tgt; r.u.rotation.z = tgt; });
+      sc.rotation.z = tilt;
+      sc.position.y = Math.sin(p * Math.PI) * 0.05;
+      av.stumTilt = tilt;
+    }
     if(av.floating && av.t > (av.roamPause || 0) && av.t > (av.nextRoam || 0)){
       const L = Math.random() * (window.innerWidth - 170);
       const T = 70 + Math.random() * Math.max(10, window.innerHeight - 310);
@@ -1359,7 +1370,7 @@ function avLoop(){
     }
     if(av.earT > 0) av.earT -= dt;
     if(av.auto && !speaking && !live && av.t > av.nextAct){
-      const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "home", "joy", "fun", "surprised"];
+      const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "home", "joy", "fun", "surprised", "cute", "stumble"];
       avDo(acts[Math.floor(Math.random() * acts.length)]);
       av.nextAct = av.t + 5 + Math.random() * 7;
     }
@@ -1367,13 +1378,13 @@ function avLoop(){
   if(av.head){
     av.head.rotation.x = nodOff + av.hy + Math.sin(av.t * 0.7) * 0.02 + av.mouth * 0.04 * Math.sin(av.t * 5);
     av.head.rotation.y = av.hx;
-    av.head.rotation.z = Math.sin(av.t * 0.45) * 0.025;
+    av.head.rotation.z = Math.sin(av.t * 0.45) * 0.025 + (av.stumTilt || 0) * 0.6;
   }
   if(av.vrm && av.vrm.humanoid){
     if(!av.chest) av.chest = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Chest) || av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || false;
     if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018;
   }
-  if(av.vrm && !(av.dance > 0)) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008;
+  if(av.vrm && !(av.dance > 0) && !(av.stum > 0)) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008;
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -1455,19 +1466,23 @@ function avEmoApply(bp, P, dt){
   Object.keys(AV_EMO).forEach(k => {
     const key = AV_EMO[k];
     if(!P[key]) return;
-    const base = (k === "joy" && !avEmo.name) ? 0.12 : 0;
-    const goal = (avEmo.name === k && avEmo.t > 0) ? 0.85 : base;
+    const cuteOn = avEmo.name === "cute" && avEmo.t > 0;
+    const base = (k === "joy" && !avEmo.name) ? 0.2 : 0;
+    let goal = (avEmo.name === k && avEmo.t > 0) ? 0.85 : base;
+    if(cuteOn && k === "joy") goal = 0.6;
+    if(cuteOn && k === "fun") goal = 0.35;
     avEmoW[k] = (avEmoW[k] || 0) + (goal - (avEmoW[k] || 0)) * 0.15;
     bp.setValue(P[key], Math.max(0, Math.min(1, avEmoW[k])));
   });
 }
 function avEmote(name, secs){
-  avEmo = name && AV_EMO[name] ? {name, t: secs || 3.5} : {name: null, t: 0};
+  avEmo = name && (AV_EMO[name] || name === "cute") ? {name, t: secs || 3.5} : {name: null, t: 0};
 }
 function emoteOf(text){
   if(!text) return null;
   const words = String(text).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
   const has = list => words.some(w => list.some(x => w.startsWith(x)));
+  if(has(["мил", "котик", "солнышк", "обожаю", "очарова"])) return "cute";
   if(has(["злю", "зол", "бесит", "раздраж", "возмут", "ненавиж"])) return "angry";
   if(has(["грус", "жаль", "печал", "сожален", "сочувств"])) return "sorrow";
   if(has(["удивл", "неожидан", "ого", "вау", "неужел", "серьезн", "серьёзн"])) return "surprised";
@@ -1478,6 +1493,7 @@ function emoteOf(text){
 function emoCmd(t){
   const w = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
   const has = list => w.some(x => list.some(y => x.startsWith(y)));
+  if(has(["мил"])) return "cute";
   if(has(["удивись"])) return "surprised";
   if(has(["разозлись", "злись"])) return "angry";
   if(has(["погрусти", "грусти"])) return "sorrow";
@@ -1486,7 +1502,7 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
-const ACT_LABEL = {come: "Иду к тебе!", dance: "Танцую!", float: "Выбираюсь из окна, гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+const ACT_LABEL = {stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выбираюсь из окна, гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
 function gestureOf(t){
   if(!t) return null;
   const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
@@ -1496,6 +1512,7 @@ function gestureOf(t){
   if(has(["вылез", "выйди", "выходи", "выбирайс"])) return "float";
   if(has(["окн"])) return "dock";
   if(has(["танц", "станцуй"])) return "dance";
+  if(has(["споткн", "упад"])) return "stumble";
   if(has(["сюда"]) && has(["иди", "подойд"])) return "come";
   if(has(["назад"])) return "back";
   if(has(["подойд", "ближе", "вперед", "вперёд"])) return "front";
@@ -1536,6 +1553,8 @@ function avDoAct(name){
   if(name === "ears"){ av.earT = 1.2; return; }
   if(name === "come"){ if(av.floating) avFloat(false); avWalkTo(0, 0.3, 0); return; }
   if(name === "dance"){ av.dance = 7; return; }
+  if(name === "stumble"){ av.stum = 1.2; av.stumDir = Math.random() < 0.5 ? 1 : -1; avEmote("surprised", 1.5); return; }
+  if(name === "cute"){ avEmote("cute", 4); return; }
   if(name === "float"){ avFloat(true); return; }
   if(name === "dock"){ avFloat(false); return; }
   if(name === "stop"){ av.auto = false; return; }
@@ -1755,7 +1774,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v36", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v37", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2178,7 +2197,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v36."
-  : "Приветствую, " + uname + ". Я Джарвис v36. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v37."
+  : "Приветствую, " + uname + ". Я Джарвис v37. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
