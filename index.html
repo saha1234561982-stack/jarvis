@@ -1116,6 +1116,8 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  const g0 = x.split(" ").length <= 4 ? gestureOf(x) : null;
+  if(g0){ avDo(g0); return ACT_LABEL[g0]; }
   if(/помаш|машешь|махни/i.test(x)){ avDo("wave"); return "Машу!"; }
   if(/кивни|кивай/i.test(x)){ avDo("nod"); return "Киваю."; }
   const em = emoCmd(x);
@@ -1317,6 +1319,28 @@ function avLoop(){
   }
   av.hx = (av.hx || 0) + ((av.gx || 0) - (av.hx || 0)) * 0.04;
   av.hy = (av.hy || 0) + ((av.gy || 0) - (av.hy || 0)) * 0.04;
+  if(av.vrm && av.goal){
+    const sc = av.vrm.scene;
+    const dx = av.goal.x - sc.position.x, dz = av.goal.z - sc.position.z;
+    const moving = Math.hypot(dx, dz) > 0.012;
+    sc.position.x += dx * 0.03; sc.position.z += dz * 0.03;
+    sc.rotation.y += ((Math.PI + av.goalRy) - sc.rotation.y) * 0.05;
+    (av.legs || []).forEach((lg, i) => {
+      if(!lg) return;
+      const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.4 : 0;
+      lg.rotation.x += (tgt - lg.rotation.x) * 0.2;
+    });
+    (av.ears || []).forEach((e, i) => {
+      const twitch = av.earT > 0 ? Math.sin(av.earT * 14) * 0.35 : 0;
+      e.o.rotation.z = e.base + twitch * (i % 2 ? -1 : 1) + Math.sin(av.t * 1.3 + i) * 0.03;
+    });
+    if(av.earT > 0) av.earT -= dt;
+    if(av.auto && !speaking && !live && av.t > av.nextAct){
+      const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "home", "joy", "fun", "surprised"];
+      avDo(acts[Math.floor(Math.random() * acts.length)]);
+      av.nextAct = av.t + 5 + Math.random() * 7;
+    }
+  }
   if(av.head){
     av.head.rotation.x = nodOff + av.hy + Math.sin(av.t * 0.7) * 0.02 + av.mouth * 0.04 * Math.sin(av.t * 5);
     av.head.rotation.y = av.hx;
@@ -1365,6 +1389,7 @@ avFile.onchange = async () => {
     av.cam.lookAt(ctr.x, focusY, ctr.z);
     av.cam.updateProjectionMatrix();
     avPose(vrm);
+    avSetupLife(vrm);
     avMsg("", false);
     avCap.style.display = "block";
     if(!av.raf) avLoop();
@@ -1438,17 +1463,27 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
+const ACT_LABEL = {wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
 function gestureOf(t){
   if(!t) return null;
   const words = String(t).toLowerCase().split(/[^а-яёa-z]+/).filter(Boolean);
-  if(words.some(w => w.startsWith("помаш"))) return "wave";
+  const has = list => words.some(w => list.some(x => w.startsWith(x)));
+  if(has(["помаш"])) return "wave";
   if(words.some(w => w === "кивни" || w === "кивай")) return "nod";
+  if(has(["назад"])) return "back";
+  if(has(["подойд", "ближе", "вперед", "вперёд"])) return "front";
+  if(has(["влево"])) return "left";
+  if(has(["вправо"])) return "right";
+  if(has(["вернись", "домой"])) return "home";
+  if(has(["ушами", "ушк", "уши"])) return "ears";
+  if(has(["стой", "стоп"])) return "stop";
+  if(has(["двигайся", "свободн"])) return "free";
   return null;
 }
 const _liveTextOrig = liveText;
 liveText = function(kind, txt){
   const g = typeof txt === "string" ? gestureOf(txt) : null;
-  if(g) avDo(g);
+  if(g === "wave" || g === "nod") avDo(g);
   const em = typeof txt === "string" ? emoteOf(txt) : null;
   if(em) avEmote(em, 3.5);
   return _liveTextOrig.apply(this, arguments);
@@ -1456,7 +1491,35 @@ liveText = function(kind, txt){
 function avDo(name){
   if(!av) return;
   if(name === "wave") av.wave = 2.8;
-  if(name === "nod") av.nod = 1.0;
+  else if(name === "nod") av.nod = 1.0;
+  else avDoAct(name);
+}
+function avWalkTo(x, z, ry){
+  av.goal.x = Math.max(-0.6, Math.min(0.6, x));
+  av.goal.z = Math.max(-0.8, Math.min(0.4, z));
+  av.goalRy = ry || 0;
+}
+function avDoAct(name){
+  if(!av || !av.goal) return;
+  const p = av.goal;
+  const map = {back: [p.x, p.z - 0.35], front: [p.x, p.z + 0.35], left: [p.x - 0.35, p.z], right: [p.x + 0.35, p.z], home: [0, 0]};
+  if(map[name]){ avWalkTo(map[name][0], map[name][1]); return; }
+  if(name === "turnL"){ avWalkTo(p.x, p.z, 0.5); return; }
+  if(name === "turnR"){ avWalkTo(p.x, p.z, -0.5); return; }
+  if(name === "ears"){ av.earT = 1.2; return; }
+  if(name === "stop"){ av.auto = false; return; }
+  if(name === "free"){ av.auto = true; return; }
+  if(name === "joy" || name === "fun" || name === "surprised"){ avEmote(name, 3); }
+}
+function avSetupLife(vrm){
+  av.ears = [];
+  vrm.scene.traverse(o => {
+    const n = o.name || "";
+    if(/ear/i.test(n) && !/year|near|clear|gear|hear/i.test(n)) av.ears.push({o, base: o.rotation.z});
+  });
+  const h = vrm.humanoid, B = THREE.VRMSchema.HumanoidBoneName;
+  av.legs = h ? [h.getBoneNode(B.LeftUpperLeg), h.getBoneNode(B.RightUpperLeg)] : [];
+  av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
 function avSet(on){
   avOn = on; sv("javatar", on);
@@ -1574,7 +1637,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v33", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v34", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1858,7 +1921,7 @@ async function send(text, photo, chain){
   text = (text || "").trim();
   if(live){
     const g = gestureOf(text);
-    if(g){ avDo(g); $("t").value = ""; add("u", text); add("j", g === "wave" ? "Машу!" : "Киваю."); return; }
+    if(g){ avDo(g); $("t").value = ""; add("u", text); add("j", ACT_LABEL[g]); return; }
     if(text) liveSendText(text); $("t").value = ""; return;
   }
   if(busy) return;
@@ -1997,7 +2060,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v33."
-  : "Приветствую, " + uname + ". Я Джарвис v33. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v34."
+  : "Приветствую, " + uname + ". Я Джарвис v34. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
