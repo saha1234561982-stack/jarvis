@@ -62,6 +62,13 @@ body.hud #sub{display:block}
 #full.on{display:block}
 #full iframe{width:100%;height:100%;border:0;background:#fff}
 #fullx{position:absolute;top:10px;right:10px;z-index:51;width:40px;height:40px}
+#lib{position:fixed;inset:0;background:#000;z-index:50;display:none;flex-direction:column;padding:12px;overflow:auto}
+#lib.on{display:flex}
+#lib .lh{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid #0a4d1a;color:#00ff41;font-size:18px}
+#lib .li{border:1px solid #0a4d1a;border-radius:12px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:8px;color:#00ff41;font-size:14px}
+#lib .lb{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+#lib .lb button{width:auto;height:auto;border-radius:8px;padding:6px 8px;font-size:14px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
+#libl{color:#00b32c;font-size:14px;padding-top:8px}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -108,6 +115,7 @@ let notes = ld("jnotes", {notes: [], todos: []});
 let timers = ld("jtimers", []);
 let hudState = "idle";
 let models = null, busy = false, speaking = false, listening = false, hf = false;
+let pendingSteps = [];
 let imgModel = null, imgTried = false, lastSrc = [], useStream = true;
 
 function setStatus(t){
@@ -363,7 +371,11 @@ async function spRun(){
 }
 
 function speak(text, cb){ spStart(); spFeed(text, true); spEnd(cb); }
-function finish(){ busy = false; idle(); if(hf) setTimeout(listen, 300); }
+function finish(){
+  busy = false; idle();
+  if(pendingSteps.length){ const n = pendingSteps.shift(); setTimeout(() => send(n, null, true), 500); return; }
+  if(hf) setTimeout(listen, 300);
+}
 const say = t => speak(t, finish);
 
 // ---------- микрофон ----------
@@ -479,8 +491,8 @@ function local(t){
   if(pc !== null) return pc;
   const m = t.trim().match(/^(запомни|запиши)[:,]?\s+(.+)/i);
   if(m){
-    facts.push(m[2].trim()); facts = facts.slice(-30); sv("jfacts", facts);
-    return "Запомнил: " + m[2].trim();
+    const f0 = m[2].trim().replace(/^что\s+/i, ""); facts.push(f0); facts = facts.slice(-30); sv("jfacts", facts);
+    return "Запомнил: " + f0;
   }
   if(/что (ты )?(помнишь|знаешь) (обо мне|про меня)/.test(s))
     {
@@ -1025,6 +1037,7 @@ function setEdit(on){
 $("edx").onclick = () => setEdit(false);
 
 function addApp(html){
+  libAdd(html);
   const d = add("j", "");
   d.classList.add("app");
   const t = document.createElement("div");
@@ -1067,6 +1080,102 @@ async function doCode(text, isEdit){
     finish();
   }
 }
+
+// ---------- библиотека приложений и обучаемые команды ----------
+let japps = ld("japps", []);
+let jcmds = ld("jcmds", []);
+const normCmd = s => s.toLowerCase().replace(/[.,!?;:«»"'—–-]/g, " ").replace(/\s+/g, " ").trim();
+function libSave(){ japps = japps.slice(-20); sv("japps", japps); }
+function libAdd(html){
+  if(japps.some(x => x.h === html)) return;
+  japps.push({t: appTitle(html), h: html, d: new Date().toLocaleDateString("ru-RU")});
+  libSave();
+}
+function libDel(i){ japps.splice(i, 1); libSave(); }
+function cmdSave(){ sv("jcmds", jcmds); }
+function matchCmd(text){
+  const t = normCmd(text);
+  if(t.length < 4) return null;
+  for(const c of jcmds){
+    const p = normCmd(c.phrase);
+    if(p && (t === p || (p.length >= 6 && t.includes(p)))) return c;
+  }
+  return null;
+}
+function findApp(q){
+  const n = parseInt(q, 10);
+  if(!isNaN(n) && String(n) === q.trim()) return n - 1;
+  const qq = normCmd(q);
+  return japps.findIndex(x => normCmd(x.t).includes(qq));
+}
+function libCmd(text){
+  const x = text.trim().replace(/[.!?]+$/, "");
+  let m = x.match(/^(?:когда я (?:говорю|скажу)|если я (?:говорю|скажу))\s+[«"]?(.+?)[»"]?\s*[,:—–-]\s*(.+)$/i);
+  if(m){
+    const phrase = m[1].trim();
+    const steps = m[2].split(/\s*;\s*|\s+(?:потом|затем)\s+/i).map(s => s.trim()).filter(Boolean);
+    jcmds = jcmds.filter(c => normCmd(c.phrase) !== normCmd(phrase));
+    jcmds.push({phrase, steps}); jcmds = jcmds.slice(-30); cmdSave();
+    return "Запомнил команду «" + phrase + "»: " + steps.join(" → ");
+  }
+  if(/^(мои команды|какие команды|список команд)$/i.test(x))
+    return jcmds.length
+      ? "Твои команды: " + jcmds.map(c => "«" + c.phrase + "» → " + c.steps.join(", ")).join("; ") + "."
+      : "Команд пока нет. Скажи, например: «когда я говорю спокойной ночи, поставь таймер на 30 минут; расскажи сказку».";
+  m = x.match(/^забудь команду\s+(.+)$/i);
+  if(m){
+    const before = jcmds.length, n = normCmd(m[1]);
+    jcmds = jcmds.filter(c => normCmd(c.phrase) !== n); cmdSave();
+    return before !== jcmds.length ? "Забыл команду «" + m[1] + "»." : "Не нашёл такой команды.";
+  }
+  if(/^(мои приложения|список приложений|библиотека приложений|библиотека)$/i.test(x)){
+    openLib();
+    return japps.length ? "Открыл библиотеку: приложений " + japps.length + "." : "Библиотека пока пуста.";
+  }
+  m = x.match(/^(?:открой|запусти) приложение\s+(.+)$/i);
+  if(m){
+    const i = findApp(m[1]);
+    if(i < 0 || !japps[i]) return "Не нашёл такое приложение.";
+    openFull(japps[i].h); return "Открываю «" + japps[i].t + "».";
+  }
+  m = x.match(/^(?:удали|сотри) приложение\s+(.+)$/i);
+  if(m){
+    const i = findApp(m[1]);
+    if(i < 0 || !japps[i]) return "Не нашёл такое приложение.";
+    const t = japps[i].t; libDel(i); return "Удалил «" + t + "».";
+  }
+  return null;
+}
+
+const libEl = document.createElement("div");
+libEl.id = "lib";
+libEl.innerHTML = '<div class="lh"><b>📚 Мои приложения</b><button class="k" id="libx">✕</button></div><div id="libl"></div>';
+document.body.appendChild(libEl);
+$("libx").onclick = () => libEl.classList.remove("on");
+function renderLib(){
+  const l = $("libl"); l.innerHTML = "";
+  if(!japps.length){ l.textContent = "Пока пусто. Попроси Джарвиса что-нибудь написать, например «сделай игру змейка»."; return; }
+  japps.forEach((a, i) => {
+    const row = document.createElement("div"); row.className = "li";
+    const name = document.createElement("div");
+    name.style.flex = "1"; name.style.minWidth = "0";
+    name.textContent = (i + 1) + ". " + a.t + (a.d ? " · " + a.d : "");
+    const bs = document.createElement("div"); bs.className = "lb";
+    const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = fn; return b; };
+    bs.append(
+      mk("▶", () => openFull(a.h)),
+      mk("💾", () => saveApp(a.h)),
+      mk("✏️", () => { lastApp = a.h; libEl.classList.remove("on"); setEdit(true); add("j", "Правим «" + a.t + "». Что изменить?"); }),
+      mk("🗑", () => { libDel(i); renderLib(); })
+    );
+    row.append(name, bs); l.append(row);
+  });
+}
+function openLib(){ renderLib(); libEl.classList.add("on"); }
+const libb = document.createElement("button");
+libb.className = "k"; libb.title = "Мои приложения"; libb.textContent = "📚";
+libb.onclick = openLib;
+$("clr").before(libb);
 
 // ---------- HUD ----------
 function getOutAn(){
@@ -1151,7 +1260,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v18", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v19", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1431,13 +1540,25 @@ function argsShort(a){
   try{ const s = JSON.stringify(a); return s.length > 60 ? s.slice(0, 57) + "…" : s; }catch(e){ return ""; }
 }
 
-async function send(text, photo){
+async function send(text, photo, chain){
   text = (text || "").trim();
   if(live){ if(text) liveSendText(text); $("t").value = ""; return; }
   if(busy) return;
   if(!photo && pendingPhoto) photo = pendingPhoto;
   if(!text && !photo) return;
   if(photo && photo === pendingPhoto) clearPending();
+  if(!photo && !editMode && !chain){
+    const lib = libCmd(text);
+    if(lib !== null){ $("t").value = ""; add("u", text); add("j", lib); say(lib); return; }
+    const lc = matchCmd(text);
+    if(lc){
+      $("t").value = "";
+      add("u", text);
+      add("j", "▶ " + lc.steps.join(" → "));
+      pendingSteps = lc.steps.slice(1);
+      return send(lc.steps[0], null, true);
+    }
+  }
   busy = true;
   const ub = add("u", text || "📷 Фото");
   if(photo){
@@ -1558,7 +1679,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v18."
-  : "Приветствую, " + uname + ". Я Джарвис v18. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v19."
+  : "Приветствую, " + uname + ". Я Джарвис v19. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
