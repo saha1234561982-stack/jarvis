@@ -1268,7 +1268,7 @@ function avInit(){
 }
 function avLoop(){
   if(!av) return;
-  if(!avOn){ av.raf = null; return; }
+  if(!avOn && !live){ av.raf = null; return; }
   const now = performance.now();
   const dt = Math.min((now - av.last) / 1000, 0.1);
   av.last = now; av.t += dt;
@@ -1283,10 +1283,8 @@ function avLoop(){
       b = k < 0.5 ? k * 2 : 2 - k * 2;
       if(av.blinkT > 0.14){ av.blinkT = -1; b = 0; }
     }
-    // громкость голоса Gemini из общего анализатора звука (тот же, что у HUD)
-    const level = Math.min(1, rmsOf(typeof outAn !== "undefined" ? outAn : null) * 6);
-    const target = !speaking ? 0 : (level > 0.04 ? level : 0.2 + 0.8 * Math.abs(Math.sin(av.t * 16)));
-    av.mouth += (target - av.mouth) * 0.5;
+    const target = speaking ? 0.2 + 0.8 * Math.abs(Math.sin(av.t * 16)) : 0;
+    av.mouth += (target - av.mouth) * 0.35;
     if(bp){
       bp.setValue(P.Blink, Math.max(0, Math.min(1, b)));
       bp.setValue(P.A, av.mouth);
@@ -1331,6 +1329,7 @@ avFile.onchange = async () => {
     av.cam.position.set(ctr.x, focusY, ctr.z + dist + size.z);
     av.cam.lookAt(ctr.x, focusY, ctr.z);
     av.cam.updateProjectionMatrix();
+    avPose(vrm);
     avMsg("", false);
     avCap.style.display = "block";
     if(!av.raf) avLoop();
@@ -1338,6 +1337,23 @@ avFile.onchange = async () => {
     avMsg("Не получилось: " + e.message, true);
   }
 };
+let avLiveShown = false;
+function avPose(vrm){
+  try{
+    const h = vrm.humanoid; if(!h || !THREE.VRMSchema) return;
+    const B = THREE.VRMSchema.HumanoidBoneName;
+    const hips = h.getBoneNode(B.Hips);
+    if(!hips) return;
+    vrm.scene.updateMatrixWorld(true);
+    const hx = hips.getWorldPosition(new THREE.Vector3()).x;
+    ["LeftUpperArm", "RightUpperArm"].forEach(name => {
+      const n = h.getBoneNode(B[name]);
+      if(!n) return;
+      const side = Math.sign(n.getWorldPosition(new THREE.Vector3()).x - hx) || 1;
+      n.rotation.z = -side * 1.15;
+    });
+  }catch(e){}
+}
 function avSet(on){
   avOn = on; sv("javatar", on);
   avDiv.classList.toggle("on", on);
@@ -1353,6 +1369,21 @@ avb.id = "avb"; avb.className = "k"; avb.title = "3D-персонаж"; avb.text
 avb.onclick = () => avSet(!avOn);
 $("clr").before(avb);
 if(avOn) avSet(true);
+
+// ---------- персонаж в живом разговоре ----------
+const _liveStartOrig = liveStart;
+liveStart = async function(...a){
+  if(!avOn){
+    avDiv.classList.add("on"); avLiveShown = true;
+    avLibs().then(() => { if(!av) avInit(); if(!av.raf) avLoop(); }).catch(() => {});
+  }
+  return _liveStartOrig.apply(this, a);
+};
+const _liveStopOrig = liveStop;
+liveStop = function(...a){
+  if(avLiveShown){ avDiv.classList.remove("on"); avLiveShown = false; }
+  return _liveStopOrig.apply(this, a);
+};
 
 // ---------- HUD ----------
 function getOutAn(){
@@ -1437,7 +1468,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v27", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v28", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -1856,7 +1887,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v27."
-  : "Приветствую, " + uname + ". Я Джарвис v27. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v28."
+  : "Приветствую, " + uname + ". Я Джарвис v28. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
