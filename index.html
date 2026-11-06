@@ -1230,6 +1230,11 @@ function findAppByName(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^экономия$/i.test(x)){
+    lowPowerMode = !lowPowerMode; sv("jlowpower", lowPowerMode);
+    if(av && av.renderer) av.renderer.setPixelRatio(lowPowerMode ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+    return lowPowerMode ? "Режим экономии включён." : "Режим экономии выключен.";
+  }
   const low = x.toLowerCase();
   if(/^(увеличь|больше|крупнее)(\s+(модель|её|ее))?$/.test(low) || /^(уменьши|меньше|мельче)(\s+(модель|её|ее))?$/.test(low)){
     if(!avCurName) return "Сначала выбери модель.";
@@ -1457,10 +1462,11 @@ function avMsg(text, show){
   $("avtxt").textContent = text;
   $("avmsg").style.display = show ? "flex" : "none";
 }
+let lowPowerMode = ld("jlowpower", false);
 function avInit(){
   const W = avDiv.clientWidth || 360, H = avDiv.clientHeight || 260;
   const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(lowPowerMode ? 1 : Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(W, H);
   renderer.setClearColor(0x000000, 0);
   avDiv.insertBefore(renderer.domElement, $("avmsg"));
@@ -1472,6 +1478,18 @@ function avInit(){
   const d = new THREE.DirectionalLight(0xffffff, 0.8); d.position.set(1, 2, 2); scene.add(d);
   const rim = new THREE.DirectionalLight(0x44ff88, 0.6); rim.position.set(-2, 2, -2); scene.add(rim);
   av = {renderer, scene, cam, vrm: null, t: 0, blinkAt: 2, blinkT: -1, mouth: 0, last: performance.now(), raf: null};
+  const shC = document.createElement("canvas"); shC.width = shC.height = 128;
+  const shG = shC.getContext("2d"); const shGr = shG.createRadialGradient(64, 64, 4, 64, 64, 62);
+  shGr.addColorStop(0, "rgba(0,0,0,0.6)"); shGr.addColorStop(1, "rgba(0,0,0,0)");
+  shG.fillStyle = shGr; shG.fillRect(0, 0, 128, 128);
+  av.shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(shC), transparent: true, depthWrite: false}));
+  av.shadow.rotation.x = -Math.PI / 2; av.shadow.position.y = 0.002; scene.add(av.shadow);
+  const glC = document.createElement("canvas"); glC.width = glC.height = 128;
+  const glG = glC.getContext("2d"); const glGr = glG.createRadialGradient(64, 64, 10, 64, 64, 64);
+  glGr.addColorStop(0, "rgba(0,255,65,0)"); glGr.addColorStop(0.6, "rgba(0,255,65,0.25)"); glGr.addColorStop(1, "rgba(0,255,65,0)");
+  glG.fillStyle = glGr; glG.fillRect(0, 0, 128, 128);
+  av.glow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(glC), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending}));
+  scene.add(av.glow);
 }
 function avLoop(){
   if(!av) return;
@@ -1676,8 +1694,8 @@ function avLoop(){
     }
   }
   if(av.head){
-    av.head.rotation.x = nodOff + av.hy + Math.sin(av.t * 0.7) * 0.02 + av.mouth * 0.04 * Math.sin(av.t * 5) + 0;
-    av.head.rotation.y = av.hx;
+    av.head.rotation.x = (av.gazeY || 0) + nodOff + av.hy + Math.sin(av.t * 0.7) * 0.02 + av.mouth * 0.04 * Math.sin(av.t * 5) + 0;
+    av.head.rotation.y = av.hx + (av.gazeX || 0);
     av.head.rotation.z = Math.sin(av.t * 0.45) * 0.025 + (av.stumTilt || 0) * 0.6;
   }
   if(av.vrm && av.vrm.humanoid){
@@ -1704,6 +1722,16 @@ function avLoop(){
     }
   }
   if(av.vrm && !(av.dance > 0) && !(av.stum > 0)) av.vrm.scene.rotation.z = Math.sin(av.t * 0.6) * 0.008 + (av.walkMoving ? -0.05 * (av.fdir || 1) : 0);
+  if(av.vrm){
+    if(!(av.tapT && av.t < av.tapT)){
+      if(listening){ av.gazeTx = 0.1; av.gazeTy = 0; }
+      else if(!av.gazeAt || av.t > av.gazeAt){ av.gazeTx = (Math.random() - 0.5) * 0.5; av.gazeTy = (Math.random() - 0.5) * 0.15; av.gazeAt = av.t + 2 + Math.random() * 3; }
+    }
+    av.gazeX = (av.gazeX || 0) + ((av.gazeTx || 0) - (av.gazeX || 0)) * 0.06;
+    av.gazeY = (av.gazeY || 0) + ((av.gazeTy || 0) - (av.gazeY || 0)) * 0.06;
+    if(av.shadow){ av.shadow.position.x = av.vrm.scene.position.x; av.shadow.position.z = av.vrm.scene.position.z; }
+    if(av.glow){ av.glow.position.set(av.vrm.scene.position.x, 0.9, av.vrm.scene.position.z - 0.3); }
+  }
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -1764,6 +1792,8 @@ async function avLoadBlob(f, name){
     avPose(vrm);
     avSetupLife(vrm);
     avMsg("", false);
+    const cv0 = avDiv.querySelector("canvas");
+    if(cv0){ cv0.style.transition = "opacity .6s"; cv0.style.opacity = "0"; setTimeout(() => { cv0.style.opacity = "1"; }, 50); }
     avCap.textContent = avCreditFor(name);
     avCurName = name;
     avCap.style.display = "block";
@@ -2218,6 +2248,15 @@ document.body.classList.add("clean");
   $("kb").before(cb);
 }
 document.addEventListener("click", () => { if(hf && rec && !listening) listen(); }, {once: true});
+avDiv.addEventListener("click", e => {
+  if(!av || av.floating || av.manual || !av.vrm) return;
+  const r = avDiv.getBoundingClientRect();
+  av.tapT = av.t + 1.6;
+  av.gazeTx = ((e.clientX - r.left) / r.width - 0.5) * 0.6;
+  av.gazeTy = -((e.clientY - r.top) / r.height - 0.5) * 0.3;
+  avEmote(Math.random() < 0.5 ? "cute" : "surprised", 2);
+  avDo("nod");
+});
 // ---------- HUD ----------
 function getOutAn(){
   actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -2301,7 +2340,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v68", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v69", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2726,7 +2765,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v68."
-  : "Приветствую, " + uname + ". Я Джарвис v68. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v69."
+  : "Приветствую, " + uname + ". Я Джарвис v69. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
