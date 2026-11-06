@@ -1540,12 +1540,12 @@ function avLoop(){
     }
     (av.legs || []).forEach((lg, i) => {
       if(!lg || av.sitK > 0.01 || av.lieK > 0.01) return;
-      const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.5 : 0;
+      const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.55 : 0;
       lg.rotation.x += (tgt - lg.rotation.x) * 0.2;
     });
     (av.lowLegs || []).forEach((lg, i) => {
       if(!lg || av.sitK > 0.01 || av.lieK > 0.01 || av.dance > 0) return;
-      const flex = moving ? Math.max(0, -Math.sin(av.t * 6 + i * Math.PI)) * 0.7 : 0;
+      const flex = moving ? Math.max(0, -Math.sin(av.t * 6 + i * Math.PI)) * 0.95 : 0;
       lg.rotation.x += (flex - lg.rotation.x) * 0.25;
     });
     (av.ears || []).forEach((e, i) => {
@@ -1646,6 +1646,25 @@ function avLoop(){
       (av.lowLegs || []).forEach((lg, i) => { if(lg) lg.rotation.x += ((0 + (i ? -kick * 0.2 : kick * 0.2)) - lg.rotation.x) * 0.2; });
     }
     if(av.floating) avWalkFloat(dt);
+    {
+      const gait = moving && av.sitK < 0.01 && av.lieK < 0.01 && !(av.dance > 0) && !(av.stum > 0) && !av.manual;
+      const p = av.t * 6;
+      if(gait){
+        if(av.hips) av.hips.rotation.y += (Math.sin(p) * 0.12 - av.hips.rotation.y) * 0.25;
+        sc.position.y = Math.abs(Math.sin(p)) * 0.03;
+        av_rig.forEach((r, i) => {
+          const sw = Math.sin(p + i * Math.PI);
+          r.u.rotation.x += (-sw * 0.5 - r.u.rotation.x) * 0.25;
+          if(r.l) r.l.rotation.x += (0.6 - r.l.rotation.x) * 0.25;
+        });
+      }else{
+        av_rig.forEach(r => {
+          r.u.rotation.x += (0 - r.u.rotation.x) * 0.2;
+          if(r.l) r.l.rotation.x += (0 - r.l.rotation.x) * 0.2;
+        });
+        if(av.hips) av.hips.rotation.y += (0 - av.hips.rotation.y) * 0.2;
+      }
+    }
     if(av.earT > 0) av.earT -= dt;
     if(false && av.auto && !speaking && !live && av.t > av.nextAct){
       const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "joy", "fun", "surprised", "cute", "stumble", "jump", "bow", "spin", "dance", "lie", "sit", "fall"];
@@ -2282,7 +2301,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v67", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v68", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2707,7 +2726,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v67."
-  : "Приветствую, " + uname + ". Я Джарвис v67. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v68."
+  : "Приветствую, " + uname + ". Я Джарвис v68. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
