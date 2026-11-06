@@ -1156,6 +1156,30 @@ function findApp(q){
   const qq = normCmd(q);
   return japps.findIndex(x => normCmd(x.t).includes(qq));
 }
+const APP_LIST = [
+  {names: ["рилсы", "шортс", "shorts"], label: "YouTube Shorts", pkg: "com.google.android.youtube", url: "https://www.youtube.com/shorts"},
+  {names: ["ютуб", "youtube"], label: "YouTube", pkg: "com.google.android.youtube", url: "https://www.youtube.com/"},
+  {names: ["телеграм", "telegram", "телега"], label: "Telegram", pkg: "org.telegram.messenger", url: "https://web.telegram.org/"},
+  {names: ["ватсап", "whatsapp", "вотсап"], label: "WhatsApp", pkg: "com.whatsapp", url: "https://web.whatsapp.com/"},
+  {names: ["карты", "гугл карты", "google maps", "maps"], label: "Google Maps", pkg: "com.google.android.apps.maps", url: "https://maps.google.com/"},
+  {names: ["яндекс карты", "яндекс карта"], label: "Яндекс Карты", pkg: "ru.yandex.yandexmaps", url: "https://yandex.ru/maps/"},
+  {names: ["почта", "gmail", "гмейл"], label: "Gmail", pkg: "com.google.android.gm", url: "https://mail.google.com/"},
+  {names: ["хром", "chrome", "браузер"], label: "Chrome", pkg: "com.android.chrome", url: "https://www.google.com/"},
+  {names: ["инстаграм", "instagram", "инста"], label: "Instagram", pkg: "com.instagram.android", url: "https://www.instagram.com/"},
+  {names: ["тикток", "tiktok"], label: "TikTok", pkg: "com.zhiliaoapp.musically", url: "https://www.tiktok.com/"},
+  {names: ["спотифай", "spotify"], label: "Spotify", pkg: "com.spotify.music", url: "https://open.spotify.com/"},
+  {names: ["яндекс музыка", "яндекс музыку"], label: "Яндекс Музыка", pkg: "ru.yandex.music", url: "https://music.yandex.ru/"},
+  {names: ["вк", "вконтакте", "vk"], label: "VK", pkg: "com.vkontakte.android", url: "https://vk.com/"},
+  {names: ["гугл", "google"], label: "Google", pkg: "com.google.android.googlequicksearchbox", url: "https://www.google.com/"}
+];
+function appIntent(a){
+  const u = new URL(a.url);
+  return "intent://" + u.host + u.pathname + u.search + "#Intent;scheme=https;package=" + a.pkg + ";S.browser_fallback_url=" + encodeURIComponent(a.url) + ";end";
+}
+function findAppByName(q){
+  const low = String(q).toLowerCase().trim();
+  return APP_LIST.find(a => a.names.some(n => low === n || low.startsWith(n + " ") || low.endsWith(" " + n))) || APP_LIST.find(a => a.names.some(n => low.includes(n))) || null;
+}
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
   const tn = x.match(/^(?:тон|голос)\s+(низкий|обычный|высокий)$/i);
@@ -1243,6 +1267,22 @@ function libCmd(text){
   if(/^(мои приложения|список приложений|библиотека приложений|библиотека)$/i.test(x)){
     openLib();
     return japps.length ? "Открыл библиотеку: приложений " + japps.length + "." : "Библиотека пока пуста.";
+  }
+  const op = x.match(/^(?:открой|запусти|включи)\s+(.+)$/i);
+  if(op && !/^приложение\s/i.test(op[1])){
+    const a = findAppByName(op[1]);
+    if(a){
+      setTimeout(() => {
+        const b = add("j", "");
+        const link = document.createElement("a");
+        link.href = appIntent(a);
+        link.textContent = "▶ Открыть " + a.label;
+        link.style.color = "#00ff41";
+        link.style.fontSize = "16px";
+        b.appendChild(link);
+      }, 60);
+      return "Открываю " + a.label + ". Нажми на ссылку, если не открылось сама.";
+    }
   }
   m = x.match(/^(?:открой|запусти) приложение\s+(.+)$/i);
   if(m){
@@ -2174,7 +2214,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v61", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v62", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2599,7 +2639,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v61."
-  : "Приветствую, " + uname + ". Я Джарвис v61. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v62."
+  : "Приветствую, " + uname + ". Я Джарвис v62. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
