@@ -1364,6 +1364,7 @@ function avInit(){
   renderer.setSize(W, H);
   renderer.setClearColor(0x000000, 0);
   avDiv.insertBefore(renderer.domElement, $("avmsg"));
+  renderer.domElement.addEventListener("webglcontextlost", e => { e.preventDefault(); setTimeout(() => location.reload(), 800); });
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(25, W / H, 0.1, 20);
   cam.position.set(0, 1.35, 2.6); cam.lookAt(0, 1.2, 0);
@@ -2173,7 +2174,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v60", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v61", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2598,7 +2599,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v60."
-  : "Приветствую, " + uname + ". Я Джарвис v60. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v61."
+  : "Приветствую, " + uname + ". Я Джарвис v61. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
