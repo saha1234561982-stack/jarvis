@@ -209,6 +209,8 @@ function curGVoice(){
   const i = avNames.indexOf(k);
   return CUTE_VOICES[(i >= 0 ? i : Math.abs([...k].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0))) % CUTE_VOICES.length];
 }
+const VOICE_RATE = {Kore: 1.1, Aoede: 1.15, Leda: 1.12, Callirrhoe: 1.0, Erinome: 1.08, Laomedeia: 1.18, Pulcherrima: 1.1, Vindemiatrix: 1.05, Autonoe: 1.13, Despina: 1.2, Achernar: 1.1, Sulafat: 1.14};
+function voiceRate(v){ return VOICE_RATE[v] || 1.1; }
 function setGVoice(name, v){ voiceMap[name || "_"] = v; sv("jvoicemap", voiceMap); }
 let voices = [];
 let vi = ld("jvoice", 0);
@@ -289,7 +291,7 @@ async function playBuf(buf){
   return new Promise(res => {
     const src = actx.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = 1.1;
+    src.playbackRate.value = voiceRate(curGVoice());
     src.connect(getOutAn());
     src.onended = res;
     curSrc = src;
@@ -1146,6 +1148,12 @@ function libCmd(text){
   }
   if(/^(какие голоса|список голосов)$/i.test(x)) return CUTE_VOICES.join(", ") + ".";
   if(/^(какой голос|мой голос)$/i.test(x)) return "Сейчас голос: " + curGVoice() + ".";
+  if(/^(поменяй|смени|сменить|другой|следующий)\s+голос$/i.test(x)){
+    const cur = CUTE_VOICES.indexOf(curGVoice());
+    const nv = CUTE_VOICES[(cur + 1) % CUTE_VOICES.length];
+    setGVoice(avCurName, nv);
+    return "Теперь я говорю голосом " + nv + ".";
+  }
   if(/^(поза|отладка|позы)$/i.test(x)){
     if(!av || !av.hips) return "Модель ещё не загружена.";
     const r = v => (Math.round(v * 100) / 100);
@@ -2130,7 +2138,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v56", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v57", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2555,7 +2563,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v56."
-  : "Приветствую, " + uname + ". Я Джарвис v56. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v57."
+  : "Приветствую, " + uname + ". Я Джарвис v57. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
