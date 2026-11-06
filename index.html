@@ -200,6 +200,16 @@ function sys(mode){
 }
 
 // ---------- голос ----------
+const CUTE_VOICES = ["Kore", "Aoede", "Leda", "Callirrhoe", "Erinome", "Laomedeia", "Pulcherrima", "Vindemiatrix", "Autonoe", "Despina", "Achernar", "Sulafat"];
+let voiceMap = ld("jvoicemap", {});
+let avCurName = "";
+function curGVoice(){
+  const k = avCurName || "_";
+  if(voiceMap[k]) return voiceMap[k];
+  const i = avNames.indexOf(k);
+  return CUTE_VOICES[(i >= 0 ? i : Math.abs([...k].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0))) % CUTE_VOICES.length];
+}
+function setGVoice(name, v){ voiceMap[name || "_"] = v; sv("jvoicemap", voiceMap); }
 let voices = [];
 let vi = ld("jvoice", 0);
 let actx = null, curSrc = null, ttsModel = null, ttsTried = false;
@@ -209,10 +219,7 @@ function loadVoices(){
   const b = (window.speechSynthesis ? speechSynthesis.getVoices() : [])
     .filter(v => /^ru/i.test(v.lang)).map(v => ({name: v.name, v}));
   voices = [
-    {name: "Gemini · Puck (живой, бодрый)", g: "Puck"},
-    {name: "Gemini · Charon (спокойный)", g: "Charon"},
-    {name: "Gemini · Fenrir (энергичный)", g: "Fenrir"},
-    {name: "Gemini · Kore (женский)", g: "Kore"},
+    ...CUTE_VOICES.map(g => ({name: "Gemini · " + g, g})),
     ...b
   ];
 }
@@ -246,7 +253,7 @@ async function gFetch(text, voiceName){
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      contents: [{parts: [{text: "Say naturally, warmly and at a brisk pace: " + text.slice(0, 500)}]}],
+      contents: [{parts: [{text: "Say in a cute, soft, playful and warm young female anime voice, naturally and lively: " + text.slice(0, 500)}]}],
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName}}}
@@ -339,7 +346,7 @@ function spPush(S, text, e){
   const t = text.replace(/[*#_`]/g, "").trim();
   if(!t) return;
   const it = {text: t};
-  if(e && e.g) it.p = gQueue(S, t, e.g);
+  if(!(e && e.v)) it.p = gQueue(S, t, curGVoice());
   S.q.push(it);
 }
 
@@ -1130,6 +1137,15 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  const gv = x.match(/^голос\s+(\S+)$/i);
+  if(gv){
+    const f = CUTE_VOICES.find(v => v.toLowerCase() === gv[1].toLowerCase());
+    if(!f) return "Не знаю такого голоса. Скажи «какие голоса».";
+    setGVoice(avCurName, f);
+    return "Теперь я говорю голосом " + f + ".";
+  }
+  if(/^(какие голоса|список голосов)$/i.test(x)) return CUTE_VOICES.join(", ") + ".";
+  if(/^(какой голос|мой голос)$/i.test(x)) return "Сейчас голос: " + curGVoice() + ".";
   if(/^(поза|отладка|позы)$/i.test(x)){
     if(!av || !av.hips) return "Модель ещё не загружена.";
     const r = v => (Math.round(v * 100) / 100);
@@ -1580,6 +1596,7 @@ async function avLoadBlob(f, name){
     avSetupLife(vrm);
     avMsg("", false);
     avCap.textContent = avCreditFor(name);
+    avCurName = name;
     avCap.style.display = "block";
     if(!av.raf) avLoop();
     if(document.body.classList.contains("clean") && !av.floating) avFloat(true);
@@ -2113,7 +2130,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v55", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v56", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2531,13 +2548,14 @@ $("vc").onclick = () => {
   loadVoices();
   if(!voices.length){ add("j", "Голоса не найдены."); return; }
   vi = (vi + 1) % voices.length; sv("jvoice", vi);
+  if(voices[vi] && voices[vi].g) setGVoice(avCurName, voices[vi].g);
   add("j", "Голос: " + voices[vi].name);
   speak("Здравствуйте, " + uname + ". Я Джарвис.", null);
 };
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v55."
-  : "Приветствую, " + uname + ". Я Джарвис v55. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v56."
+  : "Приветствую, " + uname + ". Я Джарвис v56. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
