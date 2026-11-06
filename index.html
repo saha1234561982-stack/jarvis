@@ -202,6 +202,10 @@ function sys(mode){
 // ---------- голос ----------
 const CUTE_VOICES = ["Kore", "Aoede", "Leda", "Callirrhoe", "Erinome", "Laomedeia", "Pulcherrima", "Autonoe", "Despina"];
 let voiceMap = ld("jvoicemap", {});
+let poseTune = ld("jposetune", {spread: 0, knee: 0, hip: 0, lie: 0});
+let modelScale = ld("jmodelscale", {});
+function savePose(){ sv("jposetune", poseTune); }
+function curScale(){ return modelScale[avCurName || "_"] || 1; }
 let avCurName = "";
 function curGVoice(){
   const k = avCurName || "_";
@@ -1182,6 +1186,18 @@ function findAppByName(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  const low = x.toLowerCase();
+  if(/^(увеличь|больше|крупнее)(\s+(модель|её|ее))?$/.test(low) || /^(уменьши|меньше|мельче)(\s+(модель|её|ее))?$/.test(low)){
+    if(!avCurName) return "Сначала выбери модель.";
+    const k = /^(увеличь|больше|крупнее)/.test(low) ? 1.1 : 0.9;
+    modelScale[avCurName] = Math.max(0.5, Math.min(2.5, curScale() * k));
+    sv("jmodelscale", modelScale);
+    avSwitchTo(avCurName);
+    return "Размер: " + Math.round(modelScale[avCurName] * 100) + "%.";
+  }
+  const pt = {"ноги шире": ["spread", 0.08], "ноги уже": ["spread", -0.08], "колени сильнее": ["knee", 0.2], "колени слабее": ["knee", -0.2], "садись ниже": ["hip", 0.1], "садись выше": ["hip", -0.1], "лежи ниже": ["lie", -0.1], "лежи выше": ["lie", 0.1]}[low];
+  if(pt){ poseTune[pt[0]] = Math.round((poseTune[pt[0]] + pt[1]) * 100) / 100; savePose(); return "Поза подстроена: " + low + "."; }
+  if(/^сбросить позу$/.test(low)){ poseTune = {spread: 0, knee: 0, hip: 0, lie: 0}; savePose(); return "Поза сброшена."; }
   const tn = x.match(/^(?:тон|голос)\s+(низкий|обычный|высокий)$/i);
   if(tn){
     const map = {низкий: "low", обычный: "normal", высокий: "high"};
@@ -1478,7 +1494,7 @@ function avLoop(){
     }
     (av.legs || []).forEach((lg, i) => {
       if(!lg || av.sitK > 0.01 || av.lieK > 0.01) return;
-      const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.4 : 0;
+      const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.5 : 0;
       lg.rotation.x += (tgt - lg.rotation.x) * 0.2;
     });
     (av.ears || []).forEach((e, i) => {
@@ -1539,7 +1555,7 @@ function avLoop(){
     av.lieK = (av.lieK || 0) + ((av.lying ? 1 : 0) - (av.lieK || 0)) * 0.06;
     sc.rotation.x = 0;
     if(av.hips) av.hips.rotation.x = av.lieK > 0.01 ? (av.prone ? -1.45 : 1.45) * av.lieK : 0;
-    if(av.lieK > 0.01) sc.position.y += (-0.85 * av.lieK - sc.position.y) * 0.15;
+    if(av.lieK > 0.01) sc.position.y += ((-0.85 + poseTune.lie) * av.lieK - sc.position.y) * 0.15;
     if(av.lyingUntil && av.t > av.lyingUntil){ av.lying = false; av.lyingUntil = null; }
     if(av.sitUntil && av.t > av.sitUntil){ av.sitting = false; av.sitUntil = null; }
     if(av.blushMats && av.blushMats.length){
@@ -1549,9 +1565,9 @@ function avLoop(){
     }
     av.sitK = (av.sitK || 0) + ((av.sitting ? 1 : 0) - (av.sitK || 0)) * 0.08;
     if(av.sitK > 0.01){
-      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x = -1.4 * av.sitK; lg.rotation.z = (i ? -0.35 : 0.35) * av.sitK; } });
-      (av.lowLegs || []).forEach((lg, i) => { if(lg){ lg.rotation.x = 1.6 * av.sitK; lg.rotation.z = (i ? -0.2 : 0.2) * av.sitK; } });
-      if(av.hips) av.hips.position.y = av.hipsY - 0.5 * av.sitK;
+      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x = -1.4 * av.sitK; lg.rotation.z = (i ? -0.35 - poseTune.spread : 0.35 + poseTune.spread) * av.sitK; } });
+      (av.lowLegs || []).forEach((lg, i) => { if(lg){ lg.rotation.x = (1.6 + poseTune.knee) * av.sitK; lg.rotation.z = (i ? -0.2 - poseTune.spread / 2 : 0.2 + poseTune.spread / 2) * av.sitK; } });
+      if(av.hips) av.hips.position.y = av.hipsY - (0.5 + poseTune.hip) * av.sitK;
     }
     if(av.moveNow && av.sitK < 0.01 && av.lieK < 0.01 && !(av.dance > 0) && !(av.stum > 0) && av.hips){
       av.hips.rotation.z += (Math.sin(av.t * 6) * 0.05 - av.hips.rotation.z) * 0.2;
@@ -1658,6 +1674,7 @@ async function avLoadBlob(f, name){
     }
     if(!vrm) throw new Error("это не VRM-модель (файл .vrm)");
     vrm.scene.rotation.y = Math.PI;
+    vrm.scene.scale.setScalar(modelScale[name] || 1);
     if(av.vrm) av.scene.remove(av.vrm.scene);
     av.vrm = vrm; av.scene.add(vrm.scene);
     // камера подстраивается под размер модели: верх тела и голова в кадре
@@ -1964,7 +1981,7 @@ function avWalkFloat(dt){
     const dx = av.fg.x - av.fx, dy = av.fg.y - av.fy, d = Math.hypot(dx, dy);
     if(d < 3){ av.fg = null; av.fwait = 1.5 + Math.random() * 2.5; }
     else{
-      const s = Math.min(d, 85 * dt);
+      const s = Math.min(d, 110 * dt);
       av.fx += dx / d * s; av.fy += dy / d * s;
       av.walkMoving = true;
       if(Math.abs(dx) > 1) av.fdir = dx < 0 ? -1 : 1;
@@ -2214,7 +2231,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v62", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v63", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2639,7 +2656,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v62."
-  : "Приветствую, " + uname + ". Я Джарвис v62. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v63."
+  : "Приветствую, " + uname + ". Я Джарвис v63. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
