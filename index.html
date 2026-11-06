@@ -1467,7 +1467,7 @@ function avLoop(){
     const goal = waving ? -r.base * 0.85 : r.base + sway + (av.moveNow ? Math.sin(av.t * 6 + i * Math.PI) * 0.3 : 0);
     r.cur += (goal - r.cur) * 0.12;
     r.u.rotation.z = r.cur;
-    if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : (-Math.sign(r.base) * 0.18 + Math.sin(av.t * 0.9 + i) * 0.03);
+    if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : (-Math.sign(r.base) * 0.4 + Math.sin(av.t * 0.9 + i) * 0.03);
   });
   if(!(av.gzAt > 0) || av.t > av.gzAt){
     av.gx = (Math.random() - 0.5) * 0.4;
@@ -1496,6 +1496,11 @@ function avLoop(){
       if(!lg || av.sitK > 0.01 || av.lieK > 0.01) return;
       const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.5 : 0;
       lg.rotation.x += (tgt - lg.rotation.x) * 0.2;
+    });
+    (av.lowLegs || []).forEach((lg, i) => {
+      if(!lg || av.sitK > 0.01 || av.lieK > 0.01 || av.dance > 0) return;
+      const flex = moving ? Math.max(0, -Math.sin(av.t * 6 + i * Math.PI)) * 0.7 : 0;
+      lg.rotation.x += (flex - lg.rotation.x) * 0.25;
     });
     (av.ears || []).forEach((e, i) => {
       const twitch = av.earT > 0 ? Math.sin(av.earT * 14) * 0.35 : 0;
@@ -1577,7 +1582,7 @@ function avLoop(){
       tb.rotation.z = Math.sin(av.t * (av.moveNow ? 5 : 1.4) + i) * (av.moveNow ? 0.35 : 0.12);
     });
     brainTick(dt);
-    if(!(av.prone && av.lieK > 0.3) && av.sitK < 0.01){
+    if(!(av.prone && av.lieK > 0.3) && av.sitK < 0.01 && !av.moveNow){
       (av.lowLegs || []).forEach(lg => { if(lg){ lg.rotation.x += (0 - lg.rotation.x) * 0.2; lg.rotation.z += (0 - lg.rotation.z) * 0.2; } });
       (av.legs || []).forEach(lg => { if(lg) lg.rotation.z += (0 - lg.rotation.z) * 0.2; });
       if(av.hips && av.sitK < 0.01) av.hips.position.y += (av.hipsY - av.hips.position.y) * 0.2;
@@ -1587,7 +1592,7 @@ function avLoop(){
       av_rig.forEach((r, i) => {
         const s = i ? -1 : 1;
         r.u.rotation.z += (s * 0.3 - r.u.rotation.z) * 0.2;
-        if(r.l) r.l.rotation.z += (s * 0.2 - r.l.rotation.z) * 0.2;
+        if(r.l) r.l.rotation.z += (s * 0.9 - r.l.rotation.z) * 0.2;
       });
       (av.legs || []).forEach((lg, i) => { if(lg) lg.rotation.z += (0 - lg.rotation.z) * 0.2; });
       (av.lowLegs || []).forEach((lg, i) => { if(lg) lg.rotation.z += (0 - lg.rotation.z) * 0.2; });
@@ -2231,7 +2236,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v63", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v64", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2656,7 +2661,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v63."
-  : "Приветствую, " + uname + ". Я Джарвис v63. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v64."
+  : "Приветствую, " + uname + ". Я Джарвис v64. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
