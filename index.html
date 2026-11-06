@@ -200,7 +200,7 @@ function sys(mode){
 }
 
 // ---------- голос ----------
-const CUTE_VOICES = ["Kore", "Aoede", "Leda", "Callirrhoe", "Erinome", "Laomedeia", "Pulcherrima", "Vindemiatrix", "Autonoe", "Despina", "Achernar", "Sulafat"];
+const CUTE_VOICES = ["Kore", "Aoede", "Leda", "Callirrhoe", "Erinome", "Laomedeia", "Pulcherrima", "Autonoe", "Despina"];
 let voiceMap = ld("jvoicemap", {});
 let avCurName = "";
 function curGVoice(){
@@ -212,9 +212,9 @@ function curGVoice(){
 const VOICE_RATE = {Kore: 1.1, Aoede: 1.15, Leda: 1.12, Callirrhoe: 1.0, Erinome: 1.08, Laomedeia: 1.18, Pulcherrima: 1.1, Vindemiatrix: 1.05, Autonoe: 1.13, Despina: 1.2, Achernar: 1.1, Sulafat: 1.14};
 const TONE_RATE = {low: 0.92, normal: 1.05, high: 1.16};
 const TONE_STYLE = {
-  low: "Speak in a deep, calm, warm and mature female voice, slow and relaxed, like a close friend talking, with natural small pauses and soft breaths: ",
-  normal: "Speak in a warm, natural, conversational female voice, with natural small pauses and soft breaths: ",
-  high: "Speak in a bright, high-pitched, cheerful and playful young female voice, lively and friendly, with natural small pauses and a smile: "
+  low: "Speak as a soft, gentle, warm and mature young woman, clearly female, calm and caring, speaking smoothly and continuously like a natural flowing conversation with no long pauses: ",
+  normal: "Speak as a soft, gentle and friendly young woman, clearly female, natural and warm, speaking smoothly and continuously like a natural flowing conversation with no long pauses: ",
+  high: "Speak as a bright, soft and cheerful young woman, clearly female, lively and friendly, speaking smoothly and continuously like a natural flowing conversation with no long pauses: "
 };
 let toneMap = ld("jtonemap", {});
 function curGTone(){
@@ -372,7 +372,7 @@ function spFeed(full, final){
   if(!S || S.dead) return;
   const e = voices.length ? voices[vi % voices.length] : null;
   let rest = full.slice(S.pos);
-  const re = /^[\s\S]{12,}?[.!?…]+["»)]*\s+/;
+  const re = /^[\s\S]{110,}?[.!?…]+["»)]*\s+/;
   let m;
   while((m = re.exec(rest))){
     spPush(S, rest.slice(0, m[0].length), e);
@@ -398,6 +398,10 @@ async function spRun(){
   const S = sp;
   if(!S || S.run) return;
   S.run = true;
+  if(!S.started){
+    S.started = true;
+    while(!S.dead && !S.fin && S.q.length < 2) await new Promise(r => setTimeout(r, 80));
+  }
   while(!S.dead){
     const it = S.q.shift();
     if(!it){
@@ -2159,7 +2163,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v58", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v59", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2584,7 +2588,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v58."
-  : "Приветствую, " + uname + ". Я Джарвис v58. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v59."
+  : "Приветствую, " + uname + ". Я Джарвис v59. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
