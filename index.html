@@ -1407,7 +1407,7 @@ function avLoop(){
   av_rig.forEach((r, i) => {
     const waving = av.wave > 0 && i === 1;
     const sway = Math.sin(av.t * 0.9 + i * 1.7) * 0.04;
-    const goal = waving ? -r.base * 0.85 : r.base + sway;
+    const goal = waving ? -r.base * 0.85 : r.base + sway + (av.moveNow ? Math.sin(av.t * 6 + i * Math.PI) * 0.3 : 0);
     r.cur += (goal - r.cur) * 0.12;
     r.u.rotation.z = r.cur;
     if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : (-Math.sign(r.base) * 0.18 + Math.sin(av.t * 0.9 + i) * 0.03);
@@ -1423,6 +1423,7 @@ function avLoop(){
     const sc = av.vrm.scene;
     const dx = av.goal.x - sc.position.x, dz = av.goal.z - sc.position.z;
     const moving = Math.hypot(dx, dz) > 0.012 || av.dance > 0 || av.walkMoving;
+    av.moveNow = moving;
     sc.position.x += dx * 0.03; sc.position.z += dz * 0.03;
     if(av.spin > 0){
       av.spin -= dt;
@@ -1511,6 +1512,13 @@ function avLoop(){
       (av.lowLegs || []).forEach((lg, i) => { if(lg){ lg.rotation.x = 1.6 * av.sitK; lg.rotation.z = (i ? -0.2 : 0.2) * av.sitK; } });
       if(av.hips) av.hips.position.y = av.hipsY - 0.5 * av.sitK;
     }
+    if(av.moveNow && av.sitK < 0.01 && av.lieK < 0.01 && !(av.dance > 0) && !(av.stum > 0) && av.hips){
+      av.hips.rotation.z += (Math.sin(av.t * 6) * 0.05 - av.hips.rotation.z) * 0.2;
+      av.hips.rotation.y += (Math.sin(av.t * 6 + 1) * 0.03 - av.hips.rotation.y) * 0.2;
+    }
+    (av.tails || []).forEach((tb, i) => {
+      tb.rotation.z = Math.sin(av.t * (av.moveNow ? 5 : 1.4) + i) * (av.moveNow ? 0.35 : 0.12);
+    });
     brainTick(dt);
     if(!(av.prone && av.lieK > 0.3) && av.sitK < 0.01){
       (av.lowLegs || []).forEach(lg => { if(lg){ lg.rotation.x += (0 - lg.rotation.x) * 0.2; lg.rotation.z += (0 - lg.rotation.z) * 0.2; } });
@@ -1987,6 +1995,8 @@ function avSetupLife(vrm){
   av.lowLegs = h ? [h.getBoneNode(B.LeftLowerLeg), h.getBoneNode(B.RightLowerLeg)] : [];
   av.hips = h ? h.getBoneNode(B.Hips) : null;
   av.hipsY = av.hips ? av.hips.position.y : 0;
+  av.tails = [];
+  vrm.scene.traverse(o => { if(/tail|хвост/i.test(o.name || "") && o.parent && !/tailor/i.test(o.name)) av.tails.push(o); });
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
 let avBgRaf = null, avRain = null;
@@ -2163,7 +2173,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v59", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v60", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2588,7 +2598,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v59."
-  : "Приветствую, " + uname + ". Я Джарвис v59. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v60."
+  : "Приветствую, " + uname + ". Я Джарвис v60. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
