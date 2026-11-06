@@ -239,7 +239,7 @@ function syncSliders(){
   const n = $("pbone").value; const v = av.mp.b[n] || [0, 0, 0];
   $("px").value = v[0]; $("py").value = v[1]; $("pz").value = v[2];
 }
-function manualOff(){ if(av) av.manual = false; posePanel.style.display = "none"; }
+function manualOff(){ if(av) av.manual = false; POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd) nd.rotation.set(0, 0, 0); }); }
 $("pbone").onchange = syncSliders;
 ["x","y","z"].forEach((a, i) => { $("p" + a).oninput = () => { const n = $("pbone").value; if(!av.mp.b[n]) av.mp.b[n] = [0,0,0]; av.mp.b[n][i] = parseFloat($("p" + a).value); }; });
 $("pexp").onclick = () => add("j", JSON.stringify(av.mp));
@@ -1230,13 +1230,6 @@ function findAppByName(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
-  if(/^режим позы$/i.test(x)){ return manualOn() ? "Режим позы включён. Выбирай часть тела и крути ползунки." : "Сначала выбери модель."; }
-  if(/^вернись к анимации$/i.test(x)){ manualOff(); return "Анимация включена."; }
-  const sp = x.match(/^сохрани позу\s+(.+)$/i);
-  if(sp){ if(!av || !av.vrm) return "Сначала выбери модель."; savePose(sp[1].trim()); return "Позу «" + sp[1].trim() + "» сохранил."; }
-  const lp = x.match(/^поза\s+(.+)$/i);
-  if(lp && !/^поза$/i.test(x)){ if(!av || !av.vrm) return "Сначала выбери модель."; return loadPose(lp[1].trim()) ? "Ставлю позу «" + lp[1].trim() + "»." : "Не нашёл такую позу."; }
-  if(/^экспорт позы$/i.test(x)){ return av && av.mp ? JSON.stringify(av.mp) : "Сначала включи режим позы."; }
   const low = x.toLowerCase();
   if(/^(увеличь|больше|крупнее)(\s+(модель|её|ее))?$/.test(low) || /^(уменьши|меньше|мельче)(\s+(модель|её|ее))?$/.test(low)){
     if(!avCurName) return "Сначала выбери модель.";
@@ -1486,6 +1479,7 @@ function avLoop(){
   const now = performance.now();
   const dt = Math.min((now - av.last) / 1000, 0.1);
   av.last = now; av.t += dt;
+  if(av.renderer && (av.rw !== avDiv.clientWidth || av.rh !== avDiv.clientHeight)){ av.rw = avDiv.clientWidth; av.rh = avDiv.clientHeight; avResize(); }
   if(av.manual){ manualApply(); av.renderer.render(av.scene, av.cam); av.raf = requestAnimationFrame(avLoop); return; }
   if(av.vrm){
     const bp = av.vrm.blendShapeProxy;
@@ -2288,7 +2282,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v66", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v67", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2713,7 +2707,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v66."
-  : "Приветствую, " + uname + ". Я Джарвис v66. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v67."
+  : "Приветствую, " + uname + ". Я Джарвис v67. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
