@@ -89,6 +89,8 @@ body.clean #av{flex:0 0 340px;height:340px !important;display:block !important;b
 body.clean #av.float{position:fixed !important;height:320px !important;width:200px !important;flex:none !important;background:transparent !important;border:none !important}
 body.clean #chat{flex:1 1 auto;min-height:0}
 body.clean #bar{flex:0 0 auto}
+#posepanel button{width:auto;height:auto;border-radius:8px;padding:6px 10px;font-size:13px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
+#posepanel select{width:100%;background:#000;color:#00ff41;border:1px solid #0a4d1a;padding:6px}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -202,6 +204,47 @@ function sys(mode){
 // ---------- голос ----------
 const CUTE_VOICES = ["Kore", "Aoede", "Leda", "Callirrhoe", "Erinome", "Laomedeia", "Pulcherrima", "Autonoe", "Despina"];
 let voiceMap = ld("jvoicemap", {});
+const POSE_BONES = ["Hips","Spine","Chest","Neck","Head","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand"];
+const posePanel = document.createElement("div");
+posePanel.id = "posepanel";
+posePanel.style.cssText = "position:fixed;left:6px;right:6px;top:60px;z-index:70;background:rgba(0,0,0,.92);border:1px solid #00ff41;border-radius:12px;padding:10px;display:none;color:#00ff41;font:13px monospace";
+posePanel.innerHTML = '<select id="pbone"></select>' +
+  ["x","y","z"].map(a => '<label style="display:block;margin-top:6px">' + a + ' <input id="p' + a + '" type="range" min="-3.2" max="3.2" step="0.01" style="width:85%"></label>').join("") +
+  '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button id="pexp">Экспорт</button><button id="pauto">Вернуть анимацию</button></div>';
+document.body.appendChild(posePanel);
+function poseNode(name){ return av && av.vrm && av.vrm.humanoid ? av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]) : null; }
+function snapshotPose(){
+  const mp = {hy: 0, b: {}};
+  POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd) mp.b[n] = [nd.rotation.x, nd.rotation.y, nd.rotation.z]; });
+  const hn = poseNode("Hips"); if(hn) mp.hy = hn.position.y;
+  return mp;
+}
+function manualApply(){
+  const mp = av.mp; if(!mp) return;
+  Object.keys(mp.b).forEach(n => { const nd = poseNode(n); if(nd) nd.rotation.set(mp.b[n][0], mp.b[n][1], mp.b[n][2]); });
+  const hn = poseNode("Hips"); if(hn) hn.position.y = mp.hy;
+}
+function manualOn(){
+  if(!av || !av.vrm) return false;
+  if(!av.mp) av.mp = snapshotPose();
+  av.manual = true;
+  const sel = $("pbone"); sel.innerHTML = "";
+  POSE_BONES.forEach(n => { if(poseNode(n)){ const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o); } });
+  syncSliders();
+  posePanel.style.display = "block";
+  return true;
+}
+function syncSliders(){
+  const n = $("pbone").value; const v = av.mp.b[n] || [0, 0, 0];
+  $("px").value = v[0]; $("py").value = v[1]; $("pz").value = v[2];
+}
+function manualOff(){ if(av) av.manual = false; posePanel.style.display = "none"; }
+$("pbone").onchange = syncSliders;
+["x","y","z"].forEach((a, i) => { $("p" + a).oninput = () => { const n = $("pbone").value; if(!av.mp.b[n]) av.mp.b[n] = [0,0,0]; av.mp.b[n][i] = parseFloat($("p" + a).value); }; });
+$("pexp").onclick = () => add("j", JSON.stringify(av.mp));
+$("pauto").onclick = () => manualOff();
+function savePose(name){ const all = ld("jposes", {}); all[avCurName || "_"] = all[avCurName || "_"] || {}; all[avCurName || "_"][name] = JSON.parse(JSON.stringify(av.mp || snapshotPose())); sv("jposes", all); }
+function loadPose(name){ const all = ld("jposes", {}); const p = (all[avCurName || "_"] || {})[name]; if(!p) return false; av.mp = JSON.parse(JSON.stringify(p)); av.manual = true; return true; }
 let poseTune = ld("jposetune", {spread: 0, knee: 0, hip: 0, lie: 0});
 let modelScale = ld("jmodelscale", {});
 function savePose(){ sv("jposetune", poseTune); }
@@ -1186,6 +1229,13 @@ function findAppByName(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^режим позы$/i.test(x)){ return manualOn() ? "Режим позы включён. Выбирай часть тела и крути ползунки." : "Сначала выбери модель."; }
+  if(/^вернись к анимации$/i.test(x)){ manualOff(); return "Анимация включена."; }
+  const sp = x.match(/^сохрани позу\s+(.+)$/i);
+  if(sp){ if(!av || !av.vrm) return "Сначала выбери модель."; savePose(sp[1].trim()); return "Позу «" + sp[1].trim() + "» сохранил."; }
+  const lp = x.match(/^поза\s+(.+)$/i);
+  if(lp && !/^поза$/i.test(x)){ if(!av || !av.vrm) return "Сначала выбери модель."; return loadPose(lp[1].trim()) ? "Ставлю позу «" + lp[1].trim() + "»." : "Не нашёл такую позу."; }
+  if(/^экспорт позы$/i.test(x)){ return av && av.mp ? JSON.stringify(av.mp) : "Сначала включи режим позы."; }
   const low = x.toLowerCase();
   if(/^(увеличь|больше|крупнее)(\s+(модель|её|ее))?$/.test(low) || /^(уменьши|меньше|мельче)(\s+(модель|её|ее))?$/.test(low)){
     if(!avCurName) return "Сначала выбери модель.";
@@ -1435,6 +1485,7 @@ function avLoop(){
   const now = performance.now();
   const dt = Math.min((now - av.last) / 1000, 0.1);
   av.last = now; av.t += dt;
+  if(av.manual){ manualApply(); av.renderer.render(av.scene, av.cam); av.raf = requestAnimationFrame(avLoop); return; }
   if(av.vrm){
     const bp = av.vrm.blendShapeProxy;
     const P = THREE.VRMSchema.BlendShapePresetName;
@@ -2236,7 +2287,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v64", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v65", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2661,7 +2712,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v64."
-  : "Приветствую, " + uname + ". Я Джарвис v64. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v65."
+  : "Приветствую, " + uname + ". Я Джарвис v65. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
