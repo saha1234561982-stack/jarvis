@@ -1130,6 +1130,15 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(поза|отладка|позы)$/i.test(x)){
+    if(!av || !av.hips) return "Модель ещё не загружена.";
+    const r = v => (Math.round(v * 100) / 100);
+    const L = av.legs || [], K = av.lowLegs || [];
+    return "sitK " + r(av.sitK || 0) + ", lieK " + r(av.lieK || 0) + ", prone " + !!av.prone +
+      ", таз y " + r(av.hips.position.y) + ", таз x " + r(av.hips.rotation.x) +
+      ", бедро L/R x " + r(L[0] && L[0].rotation.x) + "/" + r(L[1] && L[1].rotation.x) +
+      ", голень L/R x " + r(K[0] && K[0].rotation.x) + "/" + r(K[1] && K[1].rotation.x);
+  }
   if(/^(как ты|что чувствуешь|настроение|как себя чувствуешь)$/i.test(x)){
     return "Я " + brainMood() + ". Энергии " + Math.round(brain.energy * 100) + "%.";
   }
@@ -1449,9 +1458,9 @@ function avLoop(){
     }
     av.sitK = (av.sitK || 0) + ((av.sitting ? 1 : 0) - (av.sitK || 0)) * 0.08;
     if(av.sitK > 0.01){
-      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (-1.4 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.35 : 0.35) * av.sitK - lg.rotation.z) * 0.15; } });
-      (av.lowLegs || []).forEach((lg, i) => { if(lg){ lg.rotation.x += (1.6 * av.sitK - lg.rotation.x) * 0.15; lg.rotation.z += ((i ? -0.2 : 0.2) * av.sitK - lg.rotation.z) * 0.15; } });
-      if(av.hips) av.hips.position.y += ((av.hipsY - 0.5 * av.sitK) - av.hips.position.y) * 0.15;
+      (av.legs || []).forEach((lg, i) => { if(lg){ lg.rotation.x = -1.4 * av.sitK; lg.rotation.z = (i ? -0.35 : 0.35) * av.sitK; } });
+      (av.lowLegs || []).forEach((lg, i) => { if(lg){ lg.rotation.x = 1.6 * av.sitK; lg.rotation.z = (i ? -0.2 : 0.2) * av.sitK; } });
+      if(av.hips) av.hips.position.y = av.hipsY - 0.5 * av.sitK;
     }
     brainTick(dt);
     if(!(av.prone && av.lieK > 0.3) && av.sitK < 0.01){
@@ -2104,7 +2113,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v54", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v55", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2528,7 +2537,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v54."
-  : "Приветствую, " + uname + ". Я Джарвис v54. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v55."
+  : "Приветствую, " + uname + ". Я Джарвис v55. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
