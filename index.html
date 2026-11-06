@@ -2331,7 +2331,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v70", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v71", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2501,19 +2501,27 @@ function startCapture(){
     const inp = e.inputBuffer.getChannelData(0);
     let s2 = 0;
     for(let i = 0; i < inp.length; i++) s2 += inp[i] * inp[i];
-    // пока Джарвис говорит, тихий звук (эхо динамика) не отправляем, громкую речь — отправляем (чтобы можно было перебить)
-    if(L.playing && Math.sqrt(s2 / inp.length) < 0.05) return;
+    const rms = Math.sqrt(s2 / inp.length);
+    // пока Джарвис говорит, отправляем только заметно громкую речь (перебивание), а не эхо динамика
+    if(L.playing && rms < 0.15) return;
+    // понижаем частоту с усреднением соседних отсчётов (без него речь искажается и распознаётся плохо)
     const ratio = ctx.sampleRate / 16000;
     const n = Math.floor(inp.length / ratio);
     const pcm = new Int16Array(n);
     for(let i = 0; i < n; i++){
-      const s = Math.max(-1, Math.min(1, inp[Math.floor(i * ratio)]));
+      const from = Math.floor(i * ratio), to = Math.min(inp.length, Math.floor((i + 1) * ratio));
+      let sum = 0;
+      for(let k = from; k < to; k++) sum += inp[k];
+      const s = Math.max(-1, Math.min(1, sum / Math.max(1, to - from)));
       pcm[i] = s < 0 ? s * 32768 : s * 32767;
     }
     L.ws.send(JSON.stringify({realtimeInput: {audio: {data: b64(pcm.buffer), mimeType: "audio/pcm;rate=16000"}}}));
   };
   src.connect(proc);
-  proc.connect(ctx.destination);
+  const silentOut = ctx.createGain();
+  silentOut.gain.value = 0;
+  proc.connect(silentOut);
+  silentOut.connect(ctx.destination);
 }
 
 function playLive(data, mime){
@@ -2759,7 +2767,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v70."
-  : "Приветствую, " + uname + ". Я Джарвис v70. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v71."
+  : "Приветствую, " + uname + ". Я Джарвис v71. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
