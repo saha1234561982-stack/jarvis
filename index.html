@@ -204,6 +204,7 @@ function sys(mode){
 // ---------- голос ----------
 const CUTE_VOICES = ["Kore", "Aoede", "Leda", "Callirrhoe", "Erinome", "Laomedeia", "Pulcherrima", "Autonoe", "Despina"];
 let voiceMap = ld("jvoicemap", {});
+const DEFAULT_POSES = {"Сидит": {"b":{"Hips":[-1.55,0.043,0.0036],"Spine":[1.4,0,-0.0167],"Chest":[0,-0.11,0],"Neck":[0.06,0,0],"Head":[-0.0446,0.0861,0.00798],"LeftUpperLeg":[1.6,0,-1.1],"LeftLowerLeg":[-1.6,0.24,-0.46],"LeftFoot":[-0.37,-0.49,-0.28],"RightUpperLeg":[1.04,0.23,1.12],"RightLowerLeg":[-1.68,-0.12,-0.16],"RightFoot":[-0.05,0.15,-0.25],"LeftUpperArm":[-0.1,-1.33,0.77],"LeftLowerArm":[-0.44,-0.39,-0.13],"LeftHand":[0.3,-0.07,-0.74],"RightUpperArm":[0.18,1.56,-1.27],"RightLowerArm":[-0.39,0.58,0.27],"RightHand":[0,0,0.65]},"hy":0}, "Лежит": {"b":{"Hips":[-1.77,0.02,-0.0178],"Spine":[0.21,0,-0.02],"Chest":[0.17,0,0],"Neck":[1.01,0,0],"Head":[0.34,0.0481,-0.00373],"LeftUpperLeg":[-0.02,0,-0.47],"LeftLowerLeg":[-0.98,0,0],"LeftFoot":[-1.1,0,0],"RightUpperLeg":[0.13,0,0.66],"RightLowerLeg":[-1.72,0,0],"RightFoot":[-0.78,0,0],"LeftUpperArm":[1.71,0,1.0358],"LeftLowerArm":[-0.03,-2.35,0.36],"LeftHand":[0.2,-0.3,-0.72],"RightUpperArm":[1.37,0,-0.9943],"RightLowerArm":[0.12,2.68,-0.08],"RightHand":[0.46,0.03,0.28]},"hy":0}};
 const POSE_BONES = ["Hips","Spine","Chest","Neck","Head","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand"];
 const posePanel = document.createElement("div");
 posePanel.id = "posepanel";
@@ -222,7 +223,7 @@ function snapshotPose(){
 function manualApply(){
   const mp = av.mp; if(!mp) return;
   Object.keys(mp.b).forEach(n => { const nd = poseNode(n); if(nd) nd.rotation.set(mp.b[n][0], mp.b[n][1], mp.b[n][2]); });
-  const hn = poseNode("Hips"); if(hn) hn.position.y = mp.hy;
+  const hn = poseNode("Hips"); if(hn && mp.hy) hn.position.y = mp.hy;
 }
 function manualOn(){
   if(!av || !av.vrm) return false;
@@ -244,7 +245,7 @@ $("pbone").onchange = syncSliders;
 $("pexp").onclick = () => add("j", JSON.stringify(av.mp));
 $("pauto").onclick = () => manualOff();
 function savePose(name){ const all = ld("jposes", {}); all[avCurName || "_"] = all[avCurName || "_"] || {}; all[avCurName || "_"][name] = JSON.parse(JSON.stringify(av.mp || snapshotPose())); sv("jposes", all); }
-function loadPose(name){ const all = ld("jposes", {}); const p = (all[avCurName || "_"] || {})[name]; if(!p) return false; av.mp = JSON.parse(JSON.stringify(p)); av.manual = true; return true; }
+function loadPose(name){ const all = ld("jposes", {}); const p = (all[avCurName || "_"] || {})[name] || DEFAULT_POSES[name]; if(!p) return false; av.mp = JSON.parse(JSON.stringify(p)); av.manual = true; return true; }
 let poseTune = ld("jposetune", {spread: 0, knee: 0, hip: 0, lie: 0});
 let modelScale = ld("jmodelscale", {});
 function savePose(){ sv("jposetune", poseTune); }
@@ -1969,11 +1970,11 @@ function avDoAct(name){
   if(name === "ears"){ av.earT = 1.2; return; }
   if(name === "come"){ if(av.floating) avFloat(false); avWalkTo(0, 0.3, 0); return; }
   if(name === "dance"){ av.dance = 7; return; }
-  if(name === "sit"){ av.sitting = true; av.lying = false; return; }
-  if(name === "lie"){ av.lying = true; av.prone = false; av.lyingUntil = null; av.sitting = false; return; }
-  if(name === "lieFront"){ av.lying = true; av.prone = true; av.lyingUntil = null; av.sitting = false; return; }
+  if(name === "sit"){ av.sitting = true; av.lying = false; loadPose("Сидит"); return; }
+  if(name === "lie"){ av.lying = true; av.prone = false; av.lyingUntil = null; av.sitting = false; loadPose("Лежит"); return; }
+  if(name === "lieFront"){ av.lying = true; av.prone = true; av.lyingUntil = null; av.sitting = false; loadPose("Лежит"); return; }
   if(name === "fall"){ av.stum = 2.4; av.stumBig = true; av.stumDir = Math.random() < 0.5 ? 1 : -1; avEmote("surprised", 1.5); return; }
-  if(name === "stand"){ av.sitting = false; av.lying = false; av.lyingUntil = null; av.sitUntil = null; return; }
+  if(name === "stand"){ av.sitting = false; av.lying = false; av.lyingUntil = null; av.sitUntil = null; manualOff(); return; }
   if(name === "armsUp"){ av.pose = {mode: "up", t: 4}; return; }
   if(name === "spin"){ av.spin = 1.4; return; }
   if(name === "jump"){ av.jump = 0.7; return; }
@@ -2287,7 +2288,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v65", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v66", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2712,7 +2713,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v65."
-  : "Приветствую, " + uname + ". Я Джарвис v65. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v66."
+  : "Приветствую, " + uname + ". Я Джарвис v66. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
