@@ -210,6 +210,21 @@ function curGVoice(){
   return CUTE_VOICES[(i >= 0 ? i : Math.abs([...k].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0))) % CUTE_VOICES.length];
 }
 const VOICE_RATE = {Kore: 1.1, Aoede: 1.15, Leda: 1.12, Callirrhoe: 1.0, Erinome: 1.08, Laomedeia: 1.18, Pulcherrima: 1.1, Vindemiatrix: 1.05, Autonoe: 1.13, Despina: 1.2, Achernar: 1.1, Sulafat: 1.14};
+const TONE_RATE = {low: 0.92, normal: 1.05, high: 1.16};
+const TONE_STYLE = {
+  low: "Speak in a deep, calm, warm and mature female voice, slow and relaxed, like a close friend talking, with natural small pauses and soft breaths: ",
+  normal: "Speak in a warm, natural, conversational female voice, with natural small pauses and soft breaths: ",
+  high: "Speak in a bright, high-pitched, cheerful and playful young female voice, lively and friendly, with natural small pauses and a smile: "
+};
+let toneMap = ld("jtonemap", {});
+function curGTone(){
+  const k = avCurName || "_";
+  if(toneMap[k]) return toneMap[k];
+  const i = avNames.indexOf(k);
+  return (i >= 0 && i % 2 === 0) ? "low" : "high";
+}
+function setGTone(name, t){ toneMap[name || "_"] = t; sv("jtonemap", toneMap); }
+function voiceRateTone(){ return TONE_RATE[curGTone()] || 1.05; }
 function voiceRate(v){ return VOICE_RATE[v] || 1.1; }
 function setGVoice(name, v){ voiceMap[name || "_"] = v; sv("jvoicemap", voiceMap); }
 let voices = [];
@@ -255,7 +270,7 @@ async function gFetch(text, voiceName){
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      contents: [{parts: [{text: "Say in a cute, soft, playful and warm young female anime voice, naturally and lively: " + text.slice(0, 500)}]}],
+      contents: [{parts: [{text: TONE_STYLE[curGTone()] + text.slice(0, 500)}]}],
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName}}}
@@ -291,7 +306,7 @@ async function playBuf(buf){
   return new Promise(res => {
     const src = actx.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = voiceRate(curGVoice());
+    src.playbackRate.value = voiceRateTone();
     src.connect(getOutAn());
     src.onended = res;
     curSrc = src;
@@ -1139,6 +1154,12 @@ function findApp(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  const tn = x.match(/^(?:тон|голос)\s+(низкий|обычный|высокий)$/i);
+  if(tn){
+    const map = {низкий: "low", обычный: "normal", высокий: "high"};
+    setGTone(avCurName, map[tn[1].toLowerCase()]);
+    return "Говорю " + tn[1].toLowerCase() + "м голосом.";
+  }
   const gv = x.match(/^голос\s+(\S+)$/i);
   if(gv){
     const f = CUTE_VOICES.find(v => v.toLowerCase() === gv[1].toLowerCase());
@@ -2138,7 +2159,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v57", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v58", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2563,7 +2584,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v57."
-  : "Приветствую, " + uname + ". Я Джарвис v57. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v58."
+  : "Приветствую, " + uname + ". Я Джарвис v58. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
