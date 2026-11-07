@@ -1255,6 +1255,23 @@ function findAppByName(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(инфо о модели|инфо модель|что в модели)$/i.test(x)){
+    if(!av || !av.vrm || !av.vrm.humanoid) return "Модель ещё не загружена.";
+    const B = THREE.VRMSchema.HumanoidBoneName, h = av.vrm.humanoid;
+    const bones = Object.keys(B).filter(n => h.getBoneNode(B[n]));
+    const mats = new Set(), meshes = [], extra = [];
+    av.vrm.scene.traverse(o => {
+      if(o.isMesh) meshes.push(o.name || "?");
+      if(o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if(m.name) mats.add(m.name); });
+      if(/hair|tail|skirt|ear|волос|хвост|юбк|ухо/i.test(o.name || "") && o.parent) extra.push(o.name);
+    });
+    const fingers = bones.filter(n => /Thumb|Index|Middle|Ring|Little/.test(n));
+    add("j", "Кости: " + bones.join(", ") + ".");
+    add("j", "Пальцы: " + (fingers.length ? fingers.join(", ") : "нет") + ". Мешей: " + meshes.length + ".");
+    add("j", "Материалы: " + ([...mats].slice(0, 30).join(", ") || "нет") + ".");
+    add("j", "Волосы/хвост/юбка/уши (кости): " + (extra.slice(0, 20).join(", ") || "нет") + ".");
+    return "Вот что есть в модели. Пришли мне этот текст, и я подберу доработки под её устройство.";
+  }
   const ch = x.match(/^характер\s+(\S+)$/i);
   if(ch){
     const f = Object.keys(PERSONAS).find(k => k.toLowerCase() === ch[1].toLowerCase());
@@ -2383,7 +2400,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v74", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v75", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2819,7 +2836,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v74."
-  : "Приветствую, " + uname + ". Я Джарвис v74. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v75."
+  : "Приветствую, " + uname + ". Я Джарвис v75. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
