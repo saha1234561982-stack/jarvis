@@ -1253,6 +1253,11 @@ function findAppByName(q){
   const low = String(q).toLowerCase().trim();
   return APP_LIST.find(a => a.names.some(n => low === n || low.startsWith(n + " ") || low.endsWith(" " + n))) || APP_LIST.find(a => a.names.some(n => low.includes(n))) || null;
 }
+const STRIKE_TIME = {kick: 0.5, sidekick: 0.5, kick540: 0.9, hook: 0.4, uppercut: 0.45};
+function startStrike(type){
+  av.strike = {type, t: 0, dur: STRIKE_TIME[type] || 0.5};
+  if(type === "kick540") av.strike.dur = 0.9;
+}
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
   if(/^(кулак|сожми кулаки|сожми кулак)$/i.test(x)){ if(av) av.fistT = 1; return "Сжимаю кулаки."; }
@@ -1586,7 +1591,7 @@ function avLoop(){
   av_rig.forEach((r, i) => {
     const waving = av.wave > 0 && i === 1;
     const sway = Math.sin(av.t * 0.9 + i * 1.7) * 0.04;
-    const goal = waving ? -r.base * 0.85 : r.base + sway + (av.moveNow ? Math.sin(av.t * 6 + i * Math.PI) * 0.3 : 0);
+    const goal = waving ? -r.base * 0.85 : r.base + sway + (av.moveNow ? Math.sin(av.t * (av.run ? 9 : 6) + i * Math.PI) * 0.3 : 0);
     r.cur += (goal - r.cur) * 0.12;
     r.u.rotation.z = r.cur;
     if(r.l) r.l.rotation.z = waving ? Math.sin(av.t * 9) * 0.45 : (-Math.sign(r.base) * 0.4 + Math.sin(av.t * 0.9 + i) * 0.03);
@@ -1603,7 +1608,7 @@ function avLoop(){
     const dx = av.goal.x - sc.position.x, dz = av.goal.z - sc.position.z;
     const moving = Math.hypot(dx, dz) > 0.012 || av.dance > 0 || av.walkMoving;
     av.moveNow = moving;
-    sc.position.x += dx * 0.03; sc.position.z += dz * 0.03;
+    sc.position.x += dx * (av.run ? 0.06 : 0.03); sc.position.z += dz * (av.run ? 0.06 : 0.03);
     if(av.spin > 0){
       av.spin -= dt;
       sc.rotation.y += dt * 4.5;
@@ -1616,12 +1621,12 @@ function avLoop(){
     }
     (av.legs || []).forEach((lg, i) => {
       if(!lg || av.sitK > 0.01 || av.lieK > 0.01) return;
-      const tgt = moving ? Math.sin(av.t * 6 + i * Math.PI) * 0.55 : 0;
+      const tgt = moving ? Math.sin(av.t * (av.run ? 9 : 6) + i * Math.PI) * 0.55 : 0;
       lg.rotation.x += (tgt - lg.rotation.x) * 0.2;
     });
     (av.lowLegs || []).forEach((lg, i) => {
       if(!lg || av.sitK > 0.01 || av.lieK > 0.01 || av.dance > 0) return;
-      const flex = moving ? Math.max(0, -Math.sin(av.t * 6 + i * Math.PI)) * 0.95 : 0;
+      const flex = moving ? Math.max(0, -Math.sin(av.t * (av.run ? 9 : 6) + i * Math.PI)) * 0.95 : 0;
       lg.rotation.x += (flex - lg.rotation.x) * 0.25;
     });
     (av.ears || []).forEach((e, i) => {
@@ -1724,7 +1729,7 @@ function avLoop(){
     if(av.floating) avWalkFloat(dt);
     {
       const gait = moving && av.sitK < 0.01 && av.lieK < 0.01 && !(av.dance > 0) && !(av.stum > 0) && !av.manual;
-      const p = av.t * 6;
+      const p = av.t * (av.run ? 9 : 6);
       if(gait){
         if(av.hips) av.hips.rotation.y += (Math.sin(p) * 0.12 - av.hips.rotation.y) * 0.25;
         sc.position.y = Math.abs(Math.sin(p)) * 0.03;
@@ -1747,6 +1752,42 @@ function avLoop(){
     if(!speaking && !moving && av.auto && av.goal && av.t > (av.shiftAt || 0) && av.sitK < 0.01 && av.lieK < 0.01){
       av.shiftAt = av.t + 8 + Math.random() * 6;
       avWalkTo(av.goal.x + (Math.random() - 0.5) * 0.12, av.goal.z + (Math.random() - 0.5) * 0.08);
+    }
+    if(av.dodge > 0){
+      av.dodge -= dt;
+      const dp = 1 - Math.max(0, av.dodge) / 0.6;
+      sc.position.x += Math.sin(dp * Math.PI) * 0.02 * (av.dodgeDir || 1);
+      sc.rotation.y += dt * 9;
+      if(av.dodge <= 0){ const base = Math.PI + (av.goalRy || 0); sc.rotation.y = base + avWrap(sc.rotation.y - base); }
+    }
+    if(av.atk > 0){
+      av.atk -= dt;
+      const sw = Math.sin((1 - Math.max(0, av.atk) / 0.5) * Math.PI);
+      if(av_rig[1]){ av_rig[1].u.rotation.x = -1.3 * sw; if(av_rig[1].l) av_rig[1].l.rotation.x = 0.4 * (1 - sw); }
+      if(av.hips) av.hips.rotation.y = 0.35 * sw * (av.combatSide || 1);
+    }
+    if(av.combat && !(av.atk > 0) && !moving){
+      av_rig.forEach(r => { r.u.rotation.x += (-0.6 - r.u.rotation.x) * 0.15; if(r.l) r.l.rotation.x += (1.2 - r.l.rotation.x) * 0.15; });
+    }
+    if(av.strike){
+      const st = av.strike;
+      st.t += dt;
+      const p = Math.min(1, st.t / st.dur), sw = Math.sin(p * Math.PI);
+      const Lr = av_rig[0], Rr = av_rig[1];
+      const legR = av.legs && av.legs[1], lowR = av.lowLegs && av.lowLegs[1];
+      if(Rr){ Rr.u.rotation.x = -0.4 * (1 - sw); if(Rr.l) Rr.l.rotation.x = 1.2; }
+      if(st.type === "kick"){ if(legR){ legR.rotation.x = -1.5 * sw; legR.rotation.z = 0; } if(lowR) lowR.rotation.x = 0.1; }
+      if(st.type === "sidekick"){ if(legR){ legR.rotation.x = 0; legR.rotation.z = -1.1 * sw; } }
+      if(st.type === "kick540"){ if(legR){ legR.rotation.x = -0.4; legR.rotation.z = -1.4 * sw; } sc.rotation.y += dt * 6 * Math.PI; }
+      if(st.type === "hook" && Lr){ Lr.u.rotation.x = -0.9 * sw; Lr.u.rotation.z = 0.6 * sw; if(Lr.l) Lr.l.rotation.x = 1.6 * (1 - sw); }
+      if(st.type === "uppercut" && Lr){ Lr.u.rotation.x = -0.3; if(Lr.l) Lr.l.rotation.x = 2.2 * sw; }
+      if(av.hips) av.hips.rotation.y = 0.4 * sw * (st.type === "hook" ? -1 : 1);
+      if(p >= 1){
+        if(st.type === "kick540"){ const base = Math.PI + (av.goalRy || 0); sc.rotation.y = base + avWrap(sc.rotation.y - base); }
+        av.strike = null;
+        if(av.comboQ && av.comboQ.length) startStrike(av.comboQ.shift());
+        else av.comboQ = null;
+      }
     }
     if(av.earT > 0) av.earT -= dt;
     if(false && av.auto && !speaking && !live && av.t > av.nextAct){
@@ -1982,7 +2023,7 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
-const ACT_LABEL = {lieFront: "Ложусь на живот и болтаю ногами.", lie: "Ложусь.", fall: "Ой-ой! Падаю!", sit: "Сажусь.", stand: "Встаю.", spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+const ACT_LABEL = {kick: "Удар ногой!", kick540: "Круговой удар с разворотом!", sidekick: "Боковой удар!", hook: "Крюк!", uppercut: "Апперкот!", combo: "Комбо!", run: "Бегу!", walk: "Иду шагом.", dodge: "Уклоняюсь!", attack: "Атака!", combat: "Боевая стойка.", calm: "Обычная стойка.", victory: "Победа!", lieFront: "Ложусь на живот и болтаю ногами.", lie: "Ложусь.", fall: "Ой-ой! Падаю!", sit: "Сажусь.", stand: "Встаю.", spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
 // ---------- мозговой центр: энергия, скука, настроение, решения ----------
 const brain = {energy: 0.8, boredom: 0, lastUser: -999, lastTalk: -999, nextDecision: 0};
 const BRAIN_TALK = ["Майки, ты тут?", "Мне скучно без тебя…", "Может, поболтаем?", "Я немного устала, но я рядом."];
@@ -2024,6 +2065,19 @@ function gestureOf(t){
   if(has(["вылез", "выйди", "выходи", "выбирайс"])) return "float";
   if(has(["окн"])) return "dock";
   if(has(["танц", "станцуй"])) return "dance";
+  if(has(["540", "круговой", "кик", "kick 540"])) return "kick540";
+  if(has(["боковой"])) return "sidekick";
+  if(has(["ногой", "пинок", "kick"])) return "kick";
+  if(has(["апперкот"])) return "uppercut";
+  if(has(["крюк"])) return "hook";
+  if(has(["комбо"])) return "combo";
+  if(has(["беги", "бежим", "бегом"])) return "run";
+  if(has(["шагом"])) return "walk";
+  if(has(["уклонись", "уклоняйся"])) return "dodge";
+  if(has(["атакуй", "удар", "бей"])) return "attack";
+  if(has(["стойку", "стойка", "боевую"])) return "combat";
+  if(has(["обычная"])) return "calm";
+  if(has(["победа", "победу"])) return "victory";
   if(has(["садись", "сядь", "сесть", "присядь"])) return "sit";
   if(has(["встань", "встать"])) return "stand";
   if(has(["крутись", "кружись", "покружись", "повернись"])) return "spin";
@@ -2078,6 +2132,15 @@ function avDoAct(name){
   if(name === "ears"){ av.earT = 1.2; return; }
   if(name === "come"){ if(av.floating) avFloat(false); avWalkTo(0, 0.3, 0); return; }
   if(name === "dance"){ av.dance = 7; return; }
+  if(name === "run"){ av.run = true; return; }
+  if(name === "walk"){ av.run = false; return; }
+  if(name === "dodge"){ av.dodge = 0.6; av.dodgeDir = Math.random() < 0.5 ? 1 : -1; return; }
+  if(name === "attack"){ av.atk = 0.5; av.combatSide = Math.random() < 0.5 ? 1 : -1; return; }
+  if(name === "combat"){ av.combat = true; return; }
+  if(name === "calm"){ av.combat = false; return; }
+  if(["kick", "kick540", "sidekick", "hook", "uppercut"].includes(name)){ startStrike(name); return; }
+  if(name === "combo"){ av.comboQ = ["hook", "uppercut", "kick"]; startStrike(av.comboQ.shift()); return; }
+  if(name === "victory"){ av.pose = {mode: "up", t: 2.5}; avEmote("joy", 2.5); return; }
   if(name === "sit"){ av.sitting = true; av.lying = false; loadPose("Сидит"); return; }
   if(name === "lie"){ av.lying = true; av.prone = false; av.lyingUntil = null; av.sitting = false; loadPose("Лежит"); return; }
   if(name === "lieFront"){ av.lying = true; av.prone = true; av.lyingUntil = null; av.sitting = false; loadPose("Лежит"); return; }
@@ -2146,7 +2209,7 @@ function avWalkFloat(dt){
     const dx = av.fg.x - av.fx, dy = av.fg.y - av.fy, d = Math.hypot(dx, dy);
     if(d < 3){ av.fg = null; av.fwait = 1.5 + Math.random() * 2.5; }
     else{
-      const s = Math.min(d, 110 * dt);
+      const s = Math.min(d, (av.run ? 230 : 110) * dt);
       av.fx += dx / d * s; av.fy += dy / d * s;
       av.walkMoving = true;
       if(Math.abs(dx) > 1) av.fdir = dx < 0 ? -1 : 1;
@@ -2407,7 +2470,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v76", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v78", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2843,7 +2906,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v76."
-  : "Приветствую, " + uname + ". Я Джарвис v76. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v78."
+  : "Приветствую, " + uname + ". Я Джарвис v78. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
