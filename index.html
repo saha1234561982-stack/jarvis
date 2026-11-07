@@ -91,6 +91,8 @@ body.clean #chat{flex:1 1 auto;min-height:0}
 body.clean #bar{flex:0 0 auto}
 #posepanel button{width:auto;height:auto;border-radius:8px;padding:6px 10px;font-size:13px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
 #posepanel select{width:100%;background:#000;color:#00ff41;border:1px solid #0a4d1a;padding:6px}
+#motionpanel button{width:auto;height:auto;border-radius:8px;padding:6px 10px;font-size:13px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
+#motionpanel select,#motionpanel input{background:#000;color:#00ff41;border:1px solid #0a4d1a;padding:6px}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -213,6 +215,63 @@ posePanel.innerHTML = '<select id="pbone"></select>' +
   ["x","y","z"].map(a => '<label style="display:block;margin-top:6px">' + a + ' <input id="p' + a + '" type="range" min="-3.2" max="3.2" step="0.01" style="width:85%"></label>').join("") +
   '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button id="pexp">Экспорт</button><button id="pauto">Вернуть анимацию</button></div>';
 document.body.appendChild(posePanel);
+const motionPanel = document.createElement("div");
+motionPanel.id = "motionpanel";
+motionPanel.style.cssText = "position:fixed;left:6px;right:6px;top:56px;z-index:80;background:rgba(0,0,0,.94);border:1px solid #00ff41;border-radius:12px;padding:10px;display:none;color:#00ff41;font:13px monospace;max-height:70vh;overflow:auto";
+motionPanel.innerHTML = '<select id="mBone" style="width:100%"></select>' +
+  ["x","y","z"].map(a => '<label style="display:block;margin-top:6px">' + a + ' <input id="m' + a + '" type="range" min="-3.2" max="3.2" step="0.01" style="width:85%"></label>').join("") +
+  '<label style="display:block;margin-top:6px">длительность кадра, сек <input id="mDur" type="number" value="0.25" step="0.05" min="0.05" style="width:80px"></label>' +
+  '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button id="mKey">Кадр</button><button id="mPlay">Проиграть</button><button id="mUndo">Убрать кадр</button><button id="mClear">Очистить</button></div>' +
+  '<div style="margin-top:8px;display:flex;gap:6px"><input id="mName" placeholder="название удара" style="flex:1"><button id="mSave">Сохранить</button></div>' +
+  '<div id="mInfo" style="margin-top:6px;opacity:.8"></div><button id="mClose" style="margin-top:8px">Закрыть редактор</button>';
+document.body.appendChild(motionPanel);
+let motionKeys = [];
+function motionInfo(){ $("mInfo").textContent = "Кадров: " + motionKeys.length + (motionKeys.length ? ", длительность " + motionKeys.reduce((s, k) => s + k.d, 0).toFixed(2) + " с" : ""); }
+function mSync(){ const n = $("mBone").value; const v = (av.mp && av.mp.b[n]) || [0, 0, 0]; $("mx").value = v[0]; $("my").value = v[1]; $("mz").value = v[2]; }
+function openMotionEditor(){
+  if(!av || !av.vrm) return false;
+  av.playK = null; av.mp = snapshotPose(); av.manual = true; motionKeys = [];
+  const sel = $("mBone"); sel.innerHTML = "";
+  POSE_BONES.forEach(n => { if(poseNode(n)){ const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o); } });
+  mSync(); motionInfo(); motionPanel.style.display = "block";
+  return true;
+}
+function closeMotionEditor(){ motionPanel.style.display = "none"; if(av) av.playK = null; manualOff(); }
+function playMotion(keys){
+  if(!av || !av.vrm || !keys.length) return;
+  av.playK = {keys: JSON.parse(JSON.stringify(keys)), t: 0, total: keys.reduce((s, k) => s + k.d, 0)};
+  av.manual = true;
+  av.mp = JSON.parse(JSON.stringify(keys[0].p));
+}
+function stepPlay(dt){
+  const P = av.playK; P.t += dt;
+  if(P.t >= P.total){
+    av.mp = JSON.parse(JSON.stringify(P.keys[P.keys.length - 1].p));
+    av.playK = null;
+    if(motionPanel.style.display !== "block") manualOff();
+    return;
+  }
+  let acc = 0, i = 0;
+  while(i < P.keys.length - 1 && acc + P.keys[i].d <= P.t){ acc += P.keys[i].d; i++; }
+  const a = P.keys[i].p, b = P.keys[Math.min(i + 1, P.keys.length - 1)].p;
+  const f = Math.min(1, (P.t - acc) / P.keys[i].d), e = f * f * (3 - 2 * f);
+  const out = {hy: (a.hy || 0) + ((b.hy || 0) - (a.hy || 0)) * e, b: {}};
+  new Set([...Object.keys(a.b), ...Object.keys(b.b)]).forEach(n => {
+    const va = a.b[n] || [0, 0, 0], vb = b.b[n] || [0, 0, 0];
+    out.b[n] = [0, 1, 2].map(k => va[k] + (vb[k] - va[k]) * e);
+  });
+  av.mp = out;
+}
+function saveMotion(name, keys){ const all = ld("jmotions", {}); const k = avCurName || "_"; all[k] = all[k] || {}; all[k][name] = JSON.parse(JSON.stringify(keys)); sv("jmotions", all); }
+function loadMotion(name){ const all = ld("jmotions", {}); return ((all[avCurName || "_"] || {})[name]) || null; }
+$("mBone").onchange = mSync;
+["x", "y", "z"].forEach((a, i) => { $("m" + a).oninput = () => { const n = $("mBone").value; if(!av.mp.b[n]) av.mp.b[n] = [0, 0, 0]; av.mp.b[n][i] = parseFloat($("m" + a).value); }; });
+$("mKey").onclick = () => { motionKeys.push({d: Math.max(0.05, parseFloat($("mDur").value) || 0.25), p: JSON.parse(JSON.stringify(av.mp))}); motionInfo(); };
+$("mUndo").onclick = () => { motionKeys.pop(); motionInfo(); };
+$("mClear").onclick = () => { motionKeys = []; motionInfo(); };
+$("mPlay").onclick = () => { if(motionKeys.length) playMotion(motionKeys); };
+$("mSave").onclick = () => { const nm = $("mName").value.trim(); if(!nm || !motionKeys.length){ $("mInfo").textContent = "Нужны кадры и название."; return; } saveMotion(nm, motionKeys); $("mInfo").textContent = "Сохранил «" + nm + "»."; };
+$("mClose").onclick = () => closeMotionEditor();
 function poseNode(name){ return av && av.vrm && av.vrm.humanoid ? av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]) : null; }
 function snapshotPose(){
   const mp = {hy: 0, b: {}};
@@ -1260,6 +1319,11 @@ function startStrike(type){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^редактор (удара|движения)$/i.test(x)){ return openMotionEditor() ? "Редактор открыт. Выбирай часть тела, крути ползунки и жми «Кадр»." : "Сначала выбери модель."; }
+  if(/^закрыть редактор$/i.test(x)){ closeMotionEditor(); return "Редактор закрыт."; }
+  const pm = x.match(/^проиграй\s+(.+)$/i);
+  if(pm){ const k = loadMotion(pm[1].trim()); if(!k) return "Не нашёл такое движение."; playMotion(k); return "Проигрываю «" + pm[1].trim() + "»."; }
+  if(/^какие движения$/i.test(x)){ const all = ld("jmotions", {}); const names = Object.keys((all[avCurName || "_"] || {})); return names.length ? names.join(", ") + "." : "Пока ничего не сохранено."; }
   if(/^(кулак|сожми кулаки|сожми кулак)$/i.test(x)){ if(av) av.fistT = 1; return "Сжимаю кулаки."; }
   if(/^(расслабь руки|разожми кулаки|расслабь пальцы)$/i.test(x)){ if(av) av.fistT = 0; return "Расслабляю руки."; }
   if(/^(инфо о модели|инфо модель|что в модели)$/i.test(x)){
@@ -1561,7 +1625,7 @@ function avLoop(){
   const dt = Math.min((now - av.last) / 1000, 0.1);
   av.last = now; av.t += dt;
   if(av.renderer && (av.rw !== avDiv.clientWidth || av.rh !== avDiv.clientHeight)){ av.rw = avDiv.clientWidth; av.rh = avDiv.clientHeight; avResize(); }
-  if(av.manual){ manualApply(); av.renderer.render(av.scene, av.cam); av.raf = requestAnimationFrame(avLoop); return; }
+  if(av.manual){ if(av.playK) stepPlay(dt); manualApply(); av.renderer.render(av.scene, av.cam); av.raf = requestAnimationFrame(avLoop); return; }
   if(av.vrm){
     const bp = av.vrm.blendShapeProxy;
     const P = THREE.VRMSchema.BlendShapePresetName;
@@ -2470,7 +2534,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v78", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v79", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2906,7 +2970,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v78."
-  : "Приветствую, " + uname + ". Я Джарвис v78. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v79."
+  : "Приветствую, " + uname + ". Я Джарвис v79. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
