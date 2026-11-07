@@ -259,6 +259,27 @@ function curGVoice(){
 }
 const VOICE_RATE = {Kore: 1.1, Aoede: 1.15, Leda: 1.12, Callirrhoe: 1.0, Erinome: 1.08, Laomedeia: 1.18, Pulcherrima: 1.1, Vindemiatrix: 1.05, Autonoe: 1.13, Despina: 1.2, Achernar: 1.1, Sulafat: 1.14};
 const TONE_RATE = {low: 1.0, normal: 1.0, high: 1.0};
+const PERSONAS = {
+  "нежная": "Speak as a sweet, soft, gentle young woman with a warm smile in her voice, intimate and unhurried",
+  "игривая": "Speak as a playful, cheerful, lively young woman with a light teasing tone, expressive and bouncy",
+  "спокойная": "Speak as a calm, mature, reassuring young woman, steady and caring, like a close friend",
+  "застенчивая": "Speak as a shy, quiet, sweet young woman, slightly hesitant in a cute way",
+  "энергичная": "Speak as an energetic, bright and confident young woman, clear and enthusiastic",
+  "загадочная": "Speak as a mysterious, low and smooth young woman, slow, velvety and captivating"
+};
+let personaMap = ld("jpersona", {});
+function curPersona(){
+  const k = avCurName || "_";
+  if(personaMap[k] && PERSONAS[personaMap[k]]) return personaMap[k];
+  const keys = Object.keys(PERSONAS);
+  const i = avNames.indexOf(k);
+  return keys[(i >= 0 ? i : 0) % keys.length];
+}
+function curSpeechPrompt(){
+  const t = curGTone();
+  const tail = t === "low" ? " Keep the voice a little deeper and slower." : t === "high" ? " Keep the voice a little brighter and higher." : "";
+  return PERSONAS[curPersona()] + tail + ", naturally and with human intonation and emotion: ";
+}
 const TONE_STYLE = {
   low: "Speak as a soft, gentle, warm and mature young woman, clearly female, calm and caring, speaking smoothly and continuously like a natural flowing conversation with no long pauses: ",
   normal: "Speak as a soft, gentle and friendly young woman, clearly female, natural and warm, speaking smoothly and continuously like a natural flowing conversation with no long pauses: ",
@@ -318,7 +339,7 @@ async function gFetch(text, voiceName){
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      contents: [{parts: [{text: TONE_STYLE[curGTone()] + text.slice(0, 500)}]}],
+      contents: [{parts: [{text: curSpeechPrompt() + text.slice(0, 500)}]}],
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName}}}
@@ -424,7 +445,7 @@ function spFeed(full, final){
   if(!S || S.dead) return;
   const e = voices.length ? voices[vi % voices.length] : null;
   let rest = full.slice(S.pos);
-  const re = /^[\s\S]{110,}?[.!?…]+["»)]*\s+/;
+  const re = /^[\s\S]{200,}?[.!?…]+["»)]*\s+/;
   let m;
   while((m = re.exec(rest))){
     spPush(S, rest.slice(0, m[0].length), e);
@@ -1234,6 +1255,15 @@ function findAppByName(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  const ch = x.match(/^характер\s+(\S+)$/i);
+  if(ch){
+    const f = Object.keys(PERSONAS).find(k => k.toLowerCase() === ch[1].toLowerCase());
+    if(!f) return "Не знаю такого характера. Скажи «какие характеры».";
+    personaMap[avCurName || "_"] = f; sv("jpersona", personaMap);
+    return "Теперь я говорю характером: " + f + ".";
+  }
+  if(/^(какие характеры|список характеров)$/i.test(x)) return Object.keys(PERSONAS).join(", ") + ".";
+  if(/^(какой характер|мой характер)$/i.test(x)) return "Сейчас характер: " + curPersona() + ".";
   if(/^экономия$/i.test(x)){
     lowPowerMode = !lowPowerMode; sv("jlowpower", lowPowerMode);
     if(av && av.renderer) av.renderer.setPixelRatio(lowPowerMode ? 1 : Math.min(window.devicePixelRatio || 1, 2));
@@ -2353,7 +2383,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v73", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v74", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2789,7 +2819,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v73."
-  : "Приветствую, " + uname + ". Я Джарвис v73. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v74."
+  : "Приветствую, " + uname + ". Я Джарвис v74. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
