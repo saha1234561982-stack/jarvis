@@ -81,7 +81,7 @@ body.hud #sub{display:block}
 #av.float{position:fixed;width:200px;height:320px;z-index:45;border:none;border-radius:0;overflow:visible;box-shadow:none;background:transparent;transition:none;touch-action:none;pointer-events:none}
 #av.float #avbg{display:none}
 #av.float #avmsg,#av.float #avcap{display:none}
-body.clean header label,body.clean header button:not(#kb),
+body.clean header label,body.clean header button:not(#kb):not(#mute),
 body.clean #st,body.clean #hudwrap,body.clean #hud,body.clean #hudb,
 body.clean #vc,body.clean #hf,body.clean #clr,body.clean #libb,body.clean #avb{display:none !important}
 body.clean header b,body.clean #avcap{display:none !important}
@@ -258,7 +258,7 @@ function curGVoice(){
   return CUTE_VOICES[(i >= 0 ? i : Math.abs([...k].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0))) % CUTE_VOICES.length];
 }
 const VOICE_RATE = {Kore: 1.1, Aoede: 1.15, Leda: 1.12, Callirrhoe: 1.0, Erinome: 1.08, Laomedeia: 1.18, Pulcherrima: 1.1, Vindemiatrix: 1.05, Autonoe: 1.13, Despina: 1.2, Achernar: 1.1, Sulafat: 1.14};
-const TONE_RATE = {low: 0.92, normal: 1.05, high: 1.16};
+const TONE_RATE = {low: 1.0, normal: 1.0, high: 1.0};
 const TONE_STYLE = {
   low: "Speak as a soft, gentle, warm and mature young woman, clearly female, calm and caring, speaking smoothly and continuously like a natural flowing conversation with no long pauses: ",
   normal: "Speak as a soft, gentle and friendly young woman, clearly female, natural and warm, speaking smoothly and continuously like a natural flowing conversation with no long pauses: ",
@@ -355,7 +355,11 @@ async function playBuf(buf){
     const src = actx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = voiceRateTone();
-    src.connect(getOutAn());
+    const fade = actx.createGain();
+    fade.gain.setValueAtTime(0, actx.currentTime);
+    fade.gain.linearRampToValueAtTime(1, actx.currentTime + 0.015);
+    src.connect(fade);
+    fade.connect(getOutAn());
     src.onended = res;
     curSrc = src;
     setStatus("🔊 Говорю…");
@@ -477,7 +481,7 @@ const say = t => speak(t, finish);
 // ---------- микрофон ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
-function listen(){ if(!rec || listening || speaking || busy) return; try{ rec.start(); }catch(e){} }
+function listen(){ if(!rec || listening || speaking || busy || micMuted) return; try{ rec.start(); }catch(e){} }
 if(SR){
   rec = new SR();
   rec.lang = "ru-RU";
@@ -1389,6 +1393,17 @@ function renderLib(){
   });
 }
 function openLib(){ renderLib(); libEl.classList.add("on"); }
+let micMuted = ld("jmicmuted", false);
+const muteB = document.createElement("button");
+muteB.id = "mute"; muteB.className = "k"; muteB.title = "Микрофон";
+function paintMute(){ muteB.textContent = micMuted ? "🔇" : "🎙"; muteB.style.color = micMuted ? "#ff3b3b" : "#00ff41"; }
+muteB.onclick = () => {
+  micMuted = !micMuted; sv("jmicmuted", micMuted);
+  if(micMuted){ try{ if(rec) rec.stop(); }catch(e){} }
+  paintMute(); setStatus(micMuted ? "🔇 Микрофон выключен" : "Готов");
+};
+paintMute();
+$("kb").before(muteB);
 const libb = document.createElement("button");
 libb.className = "k"; libb.title = "Мои приложения"; libb.textContent = "📚";
 libb.onclick = openLib;
@@ -2338,7 +2353,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v72", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v73", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2504,7 +2519,7 @@ function startCapture(){
   const proc = ctx.createScriptProcessor(4096, 1, 1);
   L.proc = proc;
   proc.onaudioprocess = e => {
-    if(!live || live !== L || !L.ws || L.ws.readyState !== 1 || !L.ready) return;
+    if(micMuted || !live || live !== L || !L.ws || L.ws.readyState !== 1 || !L.ready) return;
     const inp = e.inputBuffer.getChannelData(0);
     let s2 = 0;
     for(let i = 0; i < inp.length; i++) s2 += inp[i] * inp[i];
@@ -2774,7 +2789,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v72."
-  : "Приветствую, " + uname + ". Я Джарвис v72. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v73."
+  : "Приветствую, " + uname + ". Я Джарвис v73. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
