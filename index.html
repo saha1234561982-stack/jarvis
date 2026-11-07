@@ -1496,7 +1496,7 @@ function avLoop(){
   if(av.vrm){
     const bp = av.vrm.blendShapeProxy;
     const P = THREE.VRMSchema.BlendShapePresetName;
-    if(av.t > av.blinkAt && av.blinkT < 0){ av.blinkT = 0; av.blinkAt = av.t + (Math.random() < 0.2 ? 0.9 : 2.2 + Math.random() * 3.8); }
+    if(av.t > av.blinkAt && av.blinkT < 0){ av.blinkT = 0; av.blinkAt = av.t + (listening ? 3 + Math.random() * 2.5 : (Math.random() < 0.2 ? 0.9 : 2.2 + Math.random() * 3.8)); }
     let b = 0;
     if(av.blinkT >= 0){
       av.blinkT += dt;
@@ -1676,6 +1676,13 @@ function avLoop(){
         });
         if(av.hips) av.hips.rotation.y += (0 - av.hips.rotation.y) * 0.2;
       }
+    }
+    if(speaking && !moving && av.sitK < 0.01 && av.lieK < 0.01 && !av.manual){
+      av_rig.forEach((r, i) => { if(r.l) r.l.rotation.x += (Math.sin(av.t * 2.2 + i * 2) * 0.12 - r.l.rotation.x) * 0.15; });
+    }
+    if(!speaking && !moving && av.auto && av.goal && av.t > (av.shiftAt || 0) && av.sitK < 0.01 && av.lieK < 0.01){
+      av.shiftAt = av.t + 8 + Math.random() * 6;
+      avWalkTo(av.goal.x + (Math.random() - 0.5) * 0.12, av.goal.z + (Math.random() - 0.5) * 0.08);
     }
     if(av.earT > 0) av.earT -= dt;
     if(false && av.auto && !speaking && !live && av.t > av.nextAct){
@@ -1873,7 +1880,7 @@ function avEmoApply(bp, P, dt){
     const key = AV_EMO[k];
     if(!P[key]) return;
     const cuteOn = avEmo.name === "cute" && avEmo.t > 0;
-    const base = (k === "joy" && !avEmo.name) ? 0.2 : 0;
+    const base = (k === "joy" && !avEmo.name) ? (speaking ? 0.3 : 0.2) : 0;
     let goal = (avEmo.name === k && avEmo.t > 0) ? 0.85 : base;
     if(cuteOn && k === "joy") goal = 0.6;
     if(cuteOn && k === "fun") goal = 0.35;
@@ -2145,7 +2152,7 @@ function avSetupLife(vrm){
   av.hips = h ? h.getBoneNode(B.Hips) : null;
   av.hipsY = av.hips ? av.hips.position.y : 0;
   av.tails = [];
-  vrm.scene.traverse(o => { if(/tail|хвост/i.test(o.name || "") && o.parent && !/tailor/i.test(o.name)) av.tails.push(o); });
+  vrm.scene.traverse(o => { if(/tail|хвост|hair|волос|skirt|юбк/i.test(o.name || "") && o.parent && !/tailor/i.test(o.name)) av.tails.push(o); });
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
 let avBgRaf = null, avRain = null;
@@ -2211,7 +2218,7 @@ const avb = document.createElement("button");
 avb.id = "avb"; avb.className = "k"; avb.title = "3D-персонаж"; avb.textContent = "🧑";
 avb.onclick = () => avSet(!avOn);
 $("clr").before(avb);
-if(avOn) avSet(true);
+if(avOn) setTimeout(() => avSet(true), 800);
 idbNames().catch(() => {});
 
 // ---------- персонаж в живом разговоре ----------
@@ -2331,7 +2338,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v71", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v72", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2767,7 +2774,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v71."
-  : "Приветствую, " + uname + ". Я Джарвис v71. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v72."
+  : "Приветствую, " + uname + ". Я Джарвис v72. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
