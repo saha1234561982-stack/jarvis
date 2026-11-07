@@ -1255,6 +1255,8 @@ function findAppByName(q){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(кулак|сожми кулаки|сожми кулак)$/i.test(x)){ if(av) av.fistT = 1; return "Сжимаю кулаки."; }
+  if(/^(расслабь руки|разожми кулаки|расслабь пальцы)$/i.test(x)){ if(av) av.fistT = 0; return "Расслабляю руки."; }
   if(/^(инфо о модели|инфо модель|что в модели)$/i.test(x)){
     if(!av || !av.vrm || !av.vrm.humanoid) return "Модель ещё не загружена.";
     const B = THREE.VRMSchema.HumanoidBoneName, h = av.vrm.humanoid;
@@ -1792,6 +1794,9 @@ function avLoop(){
     }
     av.gazeX = (av.gazeX || 0) + ((av.gazeTx || 0) - (av.gazeX || 0)) * 0.06;
     av.gazeY = (av.gazeY || 0) + ((av.gazeTy || 0) - (av.gazeY || 0)) * 0.06;
+    (av.eyeB || []).forEach(e => { e.rotation.y += ((av.gazeX || 0) * 0.8 - e.rotation.y) * 0.2; e.rotation.x += ((av.gazeY || 0) * 0.8 - e.rotation.x) * 0.2; });
+    av.fist = (av.fist || 0) + ((av.fistT || 0) - (av.fist || 0)) * 0.1;
+    (av.fingerB || []).forEach(f => { f.b.rotation.z = av.fist * 1.3 * f.s; });
     if(av.shadow){ av.shadow.position.x = av.vrm.scene.position.x; av.shadow.position.z = av.vrm.scene.position.z; }
   }
   av.renderer.render(av.scene, av.cam);
@@ -2213,8 +2218,10 @@ function avSetupLife(vrm){
   av.lowLegs = h ? [h.getBoneNode(B.LeftLowerLeg), h.getBoneNode(B.RightLowerLeg)] : [];
   av.hips = h ? h.getBoneNode(B.Hips) : null;
   av.hipsY = av.hips ? av.hips.position.y : 0;
+  av.eyeB = h ? [h.getBoneNode(B.LeftEye), h.getBoneNode(B.RightEye)].filter(Boolean) : [];
+  av.fingerB = h ? Object.keys(B).filter(n => /Thumb|Index|Middle|Ring|Little/.test(n)).map(n => ({b: h.getBoneNode(B[n]), s: n.startsWith("Left") ? -1 : 1})).filter(f => f.b) : [];
   av.tails = [];
-  vrm.scene.traverse(o => { if(/tail|хвост|hair|волос|skirt|юбк/i.test(o.name || "") && o.parent && !/tailor/i.test(o.name)) av.tails.push(o); });
+  vrm.scene.traverse(o => { if(o.isBone && /tail|хвост|hair|волос|skirt|юбк/i.test(o.name || "") && !/tailor/i.test(o.name)) av.tails.push(o); });
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
 let avBgRaf = null, avRain = null;
@@ -2400,7 +2407,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v75", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v76", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2836,7 +2843,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v75."
-  : "Приветствую, " + uname + ". Я Джарвис v75. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v76."
+  : "Приветствую, " + uname + ". Я Джарвис v76. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
