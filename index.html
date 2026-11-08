@@ -1337,6 +1337,21 @@ function startStrike(type){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  const bgm = x.match(/^фон\s+(.+)$/i);
+  if(bgm){
+    const key = Object.keys(BG_THEMES).find(k => k === bgm[1].trim().toLowerCase());
+    if(!key) return "Фоны: " + Object.keys(BG_THEMES).join(", ") + ".";
+    bgTheme = BG_THEMES[key]; sv("jbgtheme", bgTheme);
+    if(avRain && avDiv.classList.contains("on") && !avBgRaf) avRainKick();
+    return "Фон: " + key + ".";
+  }
+  if(/^(какой фон|мой фон)$/i.test(x)) return "Сейчас фон: " + bgThemeName() + ".";
+  if(/^(сменить фон|другой фон|новый фон)$/i.test(x)){
+    const keys = Object.keys(BG_THEMES); const nk = keys[(keys.indexOf(bgThemeName()) + 1) % keys.length];
+    bgTheme = BG_THEMES[nk]; sv("jbgtheme", bgTheme);
+    if(avRain && avDiv.classList.contains("on") && !avBgRaf) avRainKick();
+    return "Фон: " + nk + ".";
+  }
   if(/^(что ты обо мне помнишь|что ты помнишь|что ты знаешь обо мне)$/i.test(x)){ return facts.length ? facts.join("; ") : "Пока ничего не запомнила."; }
   if(/^(забудь обо мне|забудь всё|забудь все)$/i.test(x)){ facts = []; sv("jfacts", facts); return "Всё забыла."; }
   if(/^(матерись|можно матерится|включи маты|ругайся)$/i.test(x)){ matMode = true; sv("jmat", true); return "Окей, можно по-дружески ругаться, но тебя не обижу."; }
@@ -2369,6 +2384,47 @@ function avSetupLife(vrm){
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
 }
 let avBgRaf = null, avRain = null;
+const BG_THEMES = {"матрица": "matrix", "звезды": "stars", "неон": "neon", "полярное сияние": "aurora", "снег": "snow", "сакура": "sakura"};
+let bgTheme = ld("jbgtheme", "matrix");
+function bgThemeName(){ return Object.keys(BG_THEMES).find(k => BG_THEMES[k] === bgTheme) || "матрица"; }
+function drawTheme(r, c, dt, now){
+  if(r.partsTheme !== bgTheme){
+    r.partsTheme = bgTheme;
+    r.parts = Array.from({length: bgTheme === "stars" ? 140 : 70}, () => ({x: Math.random(), y: Math.random(), z: Math.random(), r: Math.random(), s: Math.random()}));
+  }
+  const w = r.w, h = r.h, t = now / 1000;
+  if(bgTheme === "neon"){
+    c.fillStyle = "rgba(0,0,0,0.35)"; c.fillRect(0, 0, w, h);
+    const hz = h * 0.55, vx = w / 2;
+    c.strokeStyle = "rgba(255,0,200,0.55)"; c.lineWidth = 1.2;
+    for(let i = 0; i < 12; i++){ const x = (i - 6) * w / 5; c.beginPath(); c.moveTo(vx, hz); c.lineTo(vx + x * 2.4, h); c.stroke(); }
+    for(let j = 0; j < 9; j++){ const f = ((j / 9) + (t * 0.25) % (1 / 9)); const y = hz + Math.pow(f, 2) * (h - hz); c.strokeStyle = "rgba(0,240,255,0.5)"; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+    return;
+  }
+  if(bgTheme === "aurora"){
+    c.fillStyle = "rgba(0,0,0,0.12)"; c.fillRect(0, 0, w, h);
+    for(let k = 0; k < 3; k++){
+      const g = c.createLinearGradient(0, 0, w, h);
+      const hue = 120 + k * 50 + Math.sin(t * 0.2 + k) * 30;
+      g.addColorStop(0, "hsla(" + hue + ",90%,55%,0)"); g.addColorStop(0.5, "hsla(" + hue + ",90%,55%,0.22)"); g.addColorStop(1, "hsla(" + hue + ",90%,55%,0)");
+      c.fillStyle = g; c.beginPath(); c.moveTo(0, h * (0.3 + k * 0.15)); c.bezierCurveTo(w * 0.3, h * (0.1 + k * 0.1 + Math.sin(t * 0.5 + k) * 0.1), w * 0.7, h * (0.5 + k * 0.1), w, h * (0.25 + k * 0.1)); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+    }
+    return;
+  }
+  c.fillStyle = "#000"; c.fillRect(0, 0, w, h);
+  if(bgTheme === "stars"){
+    r.parts.forEach(p => { p.z -= dt * 0.25; if(p.z <= 0.02){ p.z = 1; p.x = Math.random(); p.y = Math.random(); } const sx = (p.x - 0.5) / p.z * w * 0.5 + w / 2, sy = (p.y - 0.5) / p.z * h * 0.5 + h / 2; const rad = (1 - p.z) * 2.2; c.fillStyle = "rgba(255,255,255," + (1 - p.z) + ")"; c.beginPath(); c.arc(sx, sy, rad, 0, 6.283); c.fill(); });
+    return;
+  }
+  if(bgTheme === "snow"){
+    r.parts.forEach(p => { p.y += dt * (0.05 + p.s * 0.08); p.x += Math.sin(t + p.r * 10) * dt * 0.02; if(p.y > 1){ p.y = -0.02; p.x = Math.random(); } c.fillStyle = "rgba(230,245,255," + (0.4 + p.s * 0.5) + ")"; c.beginPath(); c.arc(p.x * w, p.y * h, 1 + p.s * 2.5, 0, 6.283); c.fill(); });
+    return;
+  }
+  if(bgTheme === "sakura"){
+    r.parts.forEach(p => { p.y += dt * (0.06 + p.s * 0.07); p.x += Math.sin(t * 0.8 + p.r * 9) * dt * 0.04; if(p.y > 1){ p.y = -0.03; p.x = Math.random(); } c.save(); c.translate(p.x * w, p.y * h); c.rotate(t + p.r * 6); c.fillStyle = "rgba(255,170,205," + (0.5 + p.s * 0.4) + ")"; c.beginPath(); c.ellipse(0, 0, 4 + p.s * 3, 2 + p.s * 1.5, 0, 0, 6.283); c.fill(); c.restore(); });
+    return;
+  }
+}
 function avRainInit(){
   const cv = document.createElement("canvas");
   cv.id = "avbg";
@@ -2394,6 +2450,7 @@ function avRainLoop(){
   const now = performance.now();
   const dt = Math.min((now - r.last) / 1000, 0.05);
   r.last = now;
+  if(bgTheme !== "matrix"){ drawTheme(r, c, dt, now); avBgRaf = requestAnimationFrame(avRainLoop); return; }
   c.fillStyle = "rgba(0,0,0,0.13)";
   c.fillRect(0, 0, r.w, r.h);
   c.font = r.fs + "px monospace";
@@ -2551,7 +2608,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v82", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v83", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2987,7 +3044,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v82."
-  : "Приветствую, " + uname + ". Я Джарвис v82. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v83."
+  : "Приветствую, " + uname + ". Я Джарвис v83. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
