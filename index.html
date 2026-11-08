@@ -275,7 +275,7 @@ $("mClear").onclick = () => { motionKeys = []; motionInfo(); };
 $("mPlay").onclick = () => { if(motionKeys.length) playMotion(motionKeys); };
 $("mSave").onclick = () => { const nm = $("mName").value.trim(); if(!nm || !motionKeys.length){ $("mInfo").textContent = "Нужны кадры и название."; return; } saveMotion(nm, motionKeys); $("mInfo").textContent = "Сохранил «" + nm + "»."; };
 $("mClose").onclick = () => closeMotionEditor();
-function poseNode(name){ return av && av.vrm && av.vrm.humanoid ? av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]) : null; }
+function poseNode(name){ return av && av.vrm && av.vrm.humanoid ? av.vrm.humanoid.getRawBoneNode(hbn(name)) : null; }
 function snapshotPose(){
   const mp = {hy: 0, b: {}};
   POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd) mp.b[n] = [nd.rotation.x, nd.rotation.y, nd.rotation.z]; });
@@ -1427,8 +1427,8 @@ function libCmd(text){
   if(/^(расслабь руки|разожми кулаки|расслабь пальцы)$/i.test(x)){ if(av) av.fistT = 0; return "Расслабляю руки."; }
   if(/^(инфо о модели|инфо модель|что в модели)$/i.test(x)){
     if(!av || !av.vrm || !av.vrm.humanoid) return "Модель ещё не загружена.";
-    const B = THREE.VRMSchema.HumanoidBoneName, h = av.vrm.humanoid;
-    const bones = Object.keys(B).filter(n => h.getBoneNode(B[n]));
+    const B = BONE_MAP, h = av.vrm.humanoid;
+    const bones = BONE_NAMES.filter(n => h.getRawBoneNode(B[n]));
     const mats = new Set(), meshes = [], extra = [];
     av.vrm.scene.traverse(o => {
       if(o.isMesh) meshes.push(o.name || "?");
@@ -1643,9 +1643,9 @@ $("avpick").onclick = () => avFile.click();
 let avOn = ld("javatar", true);
 let av = null;
 const AV_CDN = {
-  three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
-  gltf: "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js",
-  vrm: "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"
+  three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js",
+  gltf: "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/GLTFLoader.js",
+  vrm: "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@1.0.6/lib/three-vrm.js"
 };
 function loadScript(src){
   return new Promise((res, rej) => {
@@ -1657,9 +1657,13 @@ function loadScript(src){
 }
 let avLibsP = null;
 const AV_VRM_URLS = [
-  "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.11/lib/three-vrm.js",
-  "https://unpkg.com/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"
+  "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@1.0.6/lib/three-vrm.js",
+  "https://unpkg.com/@pixiv/three-vrm@1.0.6/lib/three-vrm.js"
 ];
+const BONE_NAMES = ["Hips","Spine","Chest","UpperChest","Neck","Head","LeftEye","RightEye","LeftShoulder","LeftUpperArm","LeftLowerArm","LeftHand","RightShoulder","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","LeftToes","RightUpperLeg","RightLowerLeg","RightFoot","RightToes","LeftThumbProximal","LeftThumbIntermediate","LeftThumbDistal","LeftIndexProximal","LeftIndexIntermediate","LeftIndexDistal","LeftMiddleProximal","LeftMiddleIntermediate","LeftMiddleDistal","LeftRingProximal","LeftRingIntermediate","LeftRingDistal","LeftLittleProximal","LeftLittleIntermediate","LeftLittleDistal","RightThumbProximal","RightThumbIntermediate","RightThumbDistal","RightIndexProximal","RightIndexIntermediate","RightIndexDistal","RightMiddleProximal","RightMiddleIntermediate","RightMiddleDistal","RightRingProximal","RightRingIntermediate","RightRingDistal","RightLittleProximal","RightLittleIntermediate","RightLittleDistal"];
+const hbn = n => n.charAt(0).toLowerCase() + n.slice(1);
+const BONE_MAP = new Proxy({}, {get: (_, k) => typeof k === "string" ? hbn(k) : undefined});
+const EXPR_MAP = {Blink: "blink", A: "aa", Joy: "happy", Angry: "angry", Sorrow: "sad", Fun: "relaxed", Surprised: "surprised"};
 function avFindVrm(){
   const roots = [window.THREE_VRM, window.VRM, window.three_vrm].filter(Boolean);
   for(const r of roots){
@@ -1683,9 +1687,7 @@ function avLibs(){
       }
       THREE.VRMImporter = lib.VRMImporter;
       THREE.VRMLoaderPlugin = lib.VRMLoaderPlugin;
-      THREE.VRMSchema = lib.VRMSchema;
     }
-    if(!THREE.VRMSchema) throw new Error("у библиотеки VRM нет VRMSchema");
     if(!THREE.VRMImporter && !THREE.VRMLoaderPlugin) throw new Error("в библиотеке нет загрузчика VRM");
   })().catch(e => { avLibsP = null; throw e; });
   return avLibsP;
@@ -1726,8 +1728,8 @@ function avLoop(){
   if(av.renderer && (av.rw !== avDiv.clientWidth || av.rh !== avDiv.clientHeight)){ av.rw = avDiv.clientWidth; av.rh = avDiv.clientHeight; avResize(); }
   if(av.manual){ if(av.playK) stepPlay(dt); manualApply(); av.renderer.render(av.scene, av.cam); av.raf = requestAnimationFrame(avLoop); return; }
   if(av.vrm){
-    const bp = av.vrm.blendShapeProxy;
-    const P = THREE.VRMSchema.BlendShapePresetName;
+    const bp = av.vrm.expressionManager ? {setValue: (n, v) => av.vrm.expressionManager.setValue(n, v), update: () => av.vrm.expressionManager.update && av.vrm.expressionManager.update()} : null;
+    const P = EXPR_MAP;
     if(av.t > av.blinkAt && av.blinkT < 0){ av.blinkT = 0; av.blinkAt = av.t + (listening ? 3 + Math.random() * 2.5 : (Math.random() < 0.2 ? 0.9 : 2.2 + Math.random() * 3.8)); }
     let b = 0;
     if(av.blinkT >= 0){
@@ -1739,7 +1741,7 @@ function avLoop(){
     const level = Math.min(1, rmsOf(typeof outAn !== "undefined" ? outAn : null) * 6);
     const target = level > 0.04 ? level : (speaking ? 0.2 + 0.8 * Math.abs(Math.sin(av.t * 16)) : 0);
     av.mouth += (target - av.mouth) * 0.5;
-    if(!av.head && av.vrm.humanoid){ av.head = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Head) || null; }
+    if(!av.head && av.vrm.humanoid){ av.head = av.vrm.humanoid.getRawBoneNode(hbn("Head")) || null; }
     if(bp){
       bp.setValue(P.Blink, Math.max(0, Math.min(1, b)));
       avEmoApply(bp, P, dt);
@@ -1776,11 +1778,11 @@ function avLoop(){
       av.spin -= dt;
       sc.rotation.y += dt * 4.5;
       if(av.spin <= 0){
-        const base = Math.PI + av.goalRy;
+        const base = (av.baseRy || 0) + av.goalRy;
         sc.rotation.y = base + avWrap(sc.rotation.y - base);
       }
     }else{
-      sc.rotation.y += ((Math.PI + av.goalRy) - sc.rotation.y) * 0.05;
+      sc.rotation.y += (((av.baseRy || 0) + av.goalRy) - sc.rotation.y) * 0.05;
     }
     (av.legs || []).forEach((lg, i) => {
       if(!lg || av.sitK > 0.01 || av.lieK > 0.01) return;
@@ -1921,7 +1923,7 @@ function avLoop(){
       const dp = 1 - Math.max(0, av.dodge) / 0.6;
       sc.position.x += Math.sin(dp * Math.PI) * 0.02 * (av.dodgeDir || 1);
       sc.rotation.y += dt * 9;
-      if(av.dodge <= 0){ const base = Math.PI + (av.goalRy || 0); sc.rotation.y = base + avWrap(sc.rotation.y - base); }
+      if(av.dodge <= 0){ const base = (av.baseRy || 0) + (av.goalRy || 0); sc.rotation.y = base + avWrap(sc.rotation.y - base); }
     }
     if(av.atk > 0){
       av.atk -= dt;
@@ -1946,7 +1948,7 @@ function avLoop(){
       if(st.type === "uppercut" && Lr){ Lr.u.rotation.x = -0.3; if(Lr.l) Lr.l.rotation.x = 2.2 * sw; }
       if(av.hips) av.hips.rotation.y = 0.4 * sw * (st.type === "hook" ? -1 : 1);
       if(p >= 1){
-        if(st.type === "kick540"){ const base = Math.PI + (av.goalRy || 0); sc.rotation.y = base + avWrap(sc.rotation.y - base); }
+        if(st.type === "kick540"){ const base = (av.baseRy || 0) + (av.goalRy || 0); sc.rotation.y = base + avWrap(sc.rotation.y - base); }
         av.strike = null;
         if(av.comboQ && av.comboQ.length) startStrike(av.comboQ.shift());
         else av.comboQ = null;
@@ -1968,15 +1970,15 @@ function avLoop(){
     av.head.rotation.z = Math.sin(av.t * 0.45) * 0.025 + (av.stumTilt || 0) * 0.6;
   }
   if(av.vrm && av.vrm.humanoid){
-    if(!av.chest) av.chest = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Chest) || av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || false;
+    if(!av.chest) av.chest = av.vrm.humanoid.getRawBoneNode(hbn("Chest")) || av.vrm.humanoid.getRawBoneNode(hbn("Spine")) || false;
     if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018 + (av.bowVal || 0) + 0;
-    if(av.vrm && av.vrm.humanoid && THREE.VRMSchema){
+    if(av.vrm && av.vrm.humanoid){
       const idle = av.lieK < 0.05 && av.sitK < 0.05;
       if(av.hips && idle){
         av.hips.rotation.z += (Math.sin(av.t * 0.5) * 0.025 - av.hips.rotation.z) * 0.1;
         av.hips.rotation.y += (Math.sin(av.t * 0.35) * 0.05 - av.hips.rotation.y) * 0.1;
       }
-      if(av.spineN === undefined) av.spineN = av.vrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName.Spine) || null;
+      if(av.spineN === undefined) av.spineN = av.vrm.humanoid.getRawBoneNode(hbn("Spine")) || null;
       if(av.spineN && idle) av.spineN.rotation.z = Math.sin(av.t * 0.5 + 1) * 0.02;
       if(av.chest){
         if(av.nextFidget === undefined) av.nextFidget = av.t + 6 + Math.random() * 8;
@@ -2033,7 +2035,8 @@ async function avLoadBlob(f, name){
     if(!av) avInit();
     const url = URL.createObjectURL(f);
     const loader = new THREE.GLTFLoader();
-    if(THREE.VRMLoaderPlugin) loader.register(parser => new THREE.VRMLoaderPlugin(parser));
+    const VL0 = avFindVrm();
+    if(VL0 && VL0.VRMLoaderPlugin) loader.register(parser => new VL0.VRMLoaderPlugin(parser));
     const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
     URL.revokeObjectURL(url);
     let vrm = gltf.userData && gltf.userData.vrm;
@@ -2042,7 +2045,8 @@ async function avLoadBlob(f, name){
       vrm = await imp.import(gltf);
     }
     if(!vrm) throw new Error("это не VRM-модель (файл .vrm)");
-    vrm.scene.rotation.y = Math.PI;
+    if(VL0 && VL0.VRMUtils && vrm.meta && String(vrm.meta.metaVersion) === "0" && VL0.VRMUtils.rotateVRM0) VL0.VRMUtils.rotateVRM0(vrm);
+    av.baseRy = vrm.scene.rotation.y;
     vrm.scene.scale.setScalar(modelScale[name] || 1);
     if(av.vrm) av.scene.remove(av.vrm.scene);
     av.vrm = vrm; av.scene.add(vrm.scene);
@@ -2119,12 +2123,12 @@ let avLiveShown = false;
 let av_rig = [];
 function avPose(vrm){
   try{
-    const h = vrm.humanoid; if(!h || !THREE.VRMSchema) return;
-    const B = THREE.VRMSchema.HumanoidBoneName;
-    const hips = h.getBoneNode(B.Hips);
+    const h = vrm.humanoid; if(!h) return;
+    const B = BONE_MAP;
+    const hips = h.getRawBoneNode(B.Hips);
     if(!hips) return;
     const V = () => new THREE.Vector3();
-    const pick = (name) => h.getBoneNode(B[name]);
+    const pick = (name) => h.getRawBoneNode(B[name]);
     vrm.scene.updateMatrixWorld(true);
     const hx = hips.getWorldPosition(V()).x;
     av_rig = [];
@@ -2425,8 +2429,8 @@ function avSetupLife(vrm){
     const n = o.name || "";
     if(/ear/i.test(n) && !/year|near|clear|gear|hear/i.test(n)) av.ears.push({o, base: o.rotation.z});
   });
-  const h = vrm.humanoid, B = THREE.VRMSchema.HumanoidBoneName;
-  av.legs = h ? [h.getBoneNode(B.LeftUpperLeg), h.getBoneNode(B.RightUpperLeg)] : [];
+  const h = vrm.humanoid, B = BONE_MAP;
+  av.legs = h ? [h.getRawBoneNode(B.LeftUpperLeg), h.getRawBoneNode(B.RightUpperLeg)] : [];
   av.blushMats = [];
   av.pinkC = new THREE.Color(0xff8fb1);
   vrm.scene.traverse(o => {
@@ -2436,11 +2440,11 @@ function avSetupLife(vrm){
       if(col && /face|skin|cheek|blush|kao|hada|肌|顔/i.test(m.name || "")) av.blushMats.push({c: col, base: col.clone()});
     });
   });
-  av.lowLegs = h ? [h.getBoneNode(B.LeftLowerLeg), h.getBoneNode(B.RightLowerLeg)] : [];
-  av.hips = h ? h.getBoneNode(B.Hips) : null;
+  av.lowLegs = h ? [h.getRawBoneNode(B.LeftLowerLeg), h.getRawBoneNode(B.RightLowerLeg)] : [];
+  av.hips = h ? h.getRawBoneNode(B.Hips) : null;
   av.hipsY = av.hips ? av.hips.position.y : 0;
-  av.eyeB = h ? [h.getBoneNode(B.LeftEye), h.getBoneNode(B.RightEye)].filter(Boolean) : [];
-  av.fingerB = h ? Object.keys(B).filter(n => /Thumb|Index|Middle|Ring|Little/.test(n)).map(n => ({b: h.getBoneNode(B[n]), s: n.startsWith("Left") ? -1 : 1})).filter(f => f.b) : [];
+  av.eyeB = h ? [h.getRawBoneNode(B.LeftEye), h.getRawBoneNode(B.RightEye)].filter(Boolean) : [];
+  av.fingerB = h ? BONE_NAMES.filter(n => /Thumb|Index|Middle|Ring|Little/.test(n)).map(n => ({b: h.getRawBoneNode(B[n]), s: n.startsWith("Left") ? -1 : 1})).filter(f => f.b) : [];
   av.tails = [];
   vrm.scene.traverse(o => { if(o.isBone && /tail|хвост|hair|волос|skirt|юбк/i.test(o.name || "") && !/tailor/i.test(o.name)) av.tails.push(o); });
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
@@ -2703,7 +2707,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v88", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v89", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3139,7 +3143,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v88."
-  : "Приветствую, " + uname + ". Я Джарвис v88. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v89."
+  : "Приветствую, " + uname + ". Я Джарвис v89. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
