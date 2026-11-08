@@ -182,10 +182,12 @@ function askKey(){
 $("kb").onclick = askKey;
 
 const CODE_SYS = "Ты — разработчик мини-приложений. Верни ТОЛЬКО один полный HTML-документ (<!DOCTYPE html> … </html>) со встроенными CSS и JavaScript. Без внешних файлов, библиотек и ссылок, без пояснений и без markdown. Приложение должно работать на телефоне: <meta name=viewport>, крупные кнопки, управление касанием. Оформление тёмное и аккуратное, текст на русском.";
+let matMode = ld("jmat", false);
 function sys(mode){
   if(mode === "code") return CODE_SYS;
   const d = new Date().toLocaleString("ru-RU", {weekday:"long", day:"numeric", month:"long", hour:"2-digit", minute:"2-digit"});
-  let s = "Ты Джарвис, умный и учтивый голосовой ассистент. Пользователя зовут " + uname + " (используй именно это имя). ";
+  let s = "Ты Джарвис, умный и учтивый голосовой ассистент. Пользователя зовут " + uname + " (используй именно это имя). " + (matMode ? "Сейчас ты в раскованном дружеском режиме: можешь время от времени употреблять русский мат и ругательства по-приятельски, к месту, но никогда не оскорбляй пользователя и не адресуй мат ему или посторонним людям. " : "");
+  s += "Говори живо, тепло и с характером, как близкий друг. На простые вопросы отвечай коротко (1–2 предложения), а когда просят объяснить или рассказать — подробно и по делу. Если просят что-то сделать (таймер, заметку, движение, приложение), используй инструмент, а не только обещай. ";
   if(mode === "math"){
     s += "Сейчас режим задач: реши аккуратно по шагам и проверь вычисления (если нужно, выполни код). Формулы пиши обычным текстом без LaTeX, используй × ÷ √ ^. В самом конце добавь отдельную строку «ИТОГ: …» с коротким ответом одним предложением. ";
   }else if(mode === "search"){
@@ -1014,6 +1016,12 @@ $("file").onchange = async e => {
 
 // ---------- инструменты агента ----------
 const TOOLS_DECL = [
+  {name: "avatar_action", description: "Выполнить движение персонажа на экране, когда пользователь просит (сесть, встать, лечь, бежать, танцевать и т.д.).",
+   parameters: {type: "OBJECT", properties: {action: {type: "STRING", description: "какое движение", enum: ["sit","stand","lie","walk","run","dance","dodge","combat","calm","victory","wave","nod","attack"]}}, required: ["action"]}},
+  {name: "open_app", description: "Открыть приложение телефона по названию (ютуб, телеграм, карты и т.д.).",
+   parameters: {type: "OBJECT", properties: {name: {type: "STRING", description: "название приложения"}}, required: ["name"]}},
+  {name: "list_memory", description: "Рассказать, что Джарвис помнит о пользователе."},
+  {name: "forget_memory", description: "Забыть всё, что Джарвис помнит о пользователе, по прямой просьбе."},
   {name: "set_timer", description: "Поставить таймер или напоминание. Когда время выйдет, Джарвис скажет сообщение.",
    parameters: {type: "OBJECT", properties: {
      seconds: {type: "NUMBER", description: "через сколько секунд сработать"},
@@ -1110,6 +1118,16 @@ async function runTool(name, a){
       const x = notes.todos.splice(i, 1)[0]; saveNotes();
       return "Вычеркнуто: " + x;
     }
+    case "avatar_action": {
+      const act = String(a.action || "");
+      if(av && av.vrm){ avDo(act); return "Выполнила: " + act + "."; }
+      return "Персонаж ещё не загружен.";
+    }
+    case "open_app": {
+      return libCmd("открой " + String(a.name || "")) || "Не нашла такое приложение.";
+    }
+    case "list_memory": return facts.length ? facts.join("; ") : "Пока ничего не запомнила.";
+    case "forget_memory": { facts = []; sv("jfacts", facts); return "Всё забыла."; }
     case "remember_fact": {
       const f = String(a.text || "").trim();
       if(f){ facts.push(f); facts = facts.slice(-30); sv("jfacts", facts); }
@@ -1319,6 +1337,10 @@ function startStrike(type){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(что ты обо мне помнишь|что ты помнишь|что ты знаешь обо мне)$/i.test(x)){ return facts.length ? facts.join("; ") : "Пока ничего не запомнила."; }
+  if(/^(забудь обо мне|забудь всё|забудь все)$/i.test(x)){ facts = []; sv("jfacts", facts); return "Всё забыла."; }
+  if(/^(матерись|можно матерится|включи маты|ругайся)$/i.test(x)){ matMode = true; sv("jmat", true); return "Окей, можно по-дружески ругаться, но тебя не обижу."; }
+  if(/^(без матов|не матерись|выключи маты|не ругайся)$/i.test(x)){ matMode = false; sv("jmat", false); return "Хорошо, без матов."; }
   if(/^редактор (удара|движения)$/i.test(x)){ return openMotionEditor() ? "Редактор открыт. Выбирай часть тела, крути ползунки и жми «Кадр»." : "Сначала выбери модель."; }
   if(/^закрыть редактор$/i.test(x)){ closeMotionEditor(); return "Редактор закрыт."; }
   const pm = x.match(/^проиграй\s+(.+)$/i);
@@ -2087,7 +2109,7 @@ function emoCmd(t){
   if(has(["успокойся"])) return "neutral";
   return undefined;
 }
-const ACT_LABEL = {kick: "Удар ногой!", kick540: "Круговой удар с разворотом!", sidekick: "Боковой удар!", hook: "Крюк!", uppercut: "Апперкот!", combo: "Комбо!", run: "Бегу!", walk: "Иду шагом.", dodge: "Уклоняюсь!", attack: "Атака!", combat: "Боевая стойка.", calm: "Обычная стойка.", victory: "Победа!", lieFront: "Ложусь на живот и болтаю ногами.", lie: "Ложусь.", fall: "Ой-ой! Падаю!", sit: "Сажусь.", stand: "Встаю.", spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
+const ACT_LABEL = {run: "Бегу!", walk: "Иду шагом.", dodge: "Уклоняюсь!", attack: "Атака!", combat: "Боевая стойка.", calm: "Обычная стойка.", victory: "Победа!", lieFront: "Ложусь на живот и болтаю ногами.", lie: "Ложусь.", fall: "Ой-ой! Падаю!", sit: "Сажусь.", stand: "Встаю.", spin: "Кручусь!", jump: "Прыг!", bow: "Кланяюсь.", armsUp: "Поднимаю руки!", armsDown: "Опускаю руки.", clap: "Хлопаю!", point: "Смотри туда!", stumble: "Ой! Ой-ой… я в порядке!", cute: "Ну вот, я вся такая милая!", come: "Иду к тебе!", dance: "Танцую!", float: "Выхожу из окна целиком и гуляю по приложению.", dock: "Возвращаюсь в окно.", wave: "Машу!", nod: "Киваю.", back: "Отхожу назад.", front: "Подхожу.", left: "Перехожу влево.", right: "Перехожу вправо.", home: "Возвращаюсь на место.", ears: "Шевелю ушами.", stop: "Стою.", free: "Двигаюсь как хочу."};
 // ---------- мозговой центр: энергия, скука, настроение, решения ----------
 const brain = {energy: 0.8, boredom: 0, lastUser: -999, lastTalk: -999, nextDecision: 0};
 const BRAIN_TALK = ["Майки, ты тут?", "Мне скучно без тебя…", "Может, поболтаем?", "Я немного устала, но я рядом."];
@@ -2129,12 +2151,9 @@ function gestureOf(t){
   if(has(["вылез", "выйди", "выходи", "выбирайс"])) return "float";
   if(has(["окн"])) return "dock";
   if(has(["танц", "станцуй"])) return "dance";
-  if(has(["540", "круговой", "кик", "kick 540"])) return "kick540";
-  if(has(["боковой"])) return "sidekick";
-  if(has(["ногой", "пинок", "kick"])) return "kick";
-  if(has(["апперкот"])) return "uppercut";
-  if(has(["крюк"])) return "hook";
-  if(has(["комбо"])) return "combo";
+  if(has(["устань", "поднимись"])) return "stand";
+  if(has(["присядь", "посиди"])) return "sit";
+  if(has(["отдохни", "полежи", "прилягь"])) return "lie";
   if(has(["беги", "бежим", "бегом"])) return "run";
   if(has(["шагом"])) return "walk";
   if(has(["уклонись", "уклоняйся"])) return "dodge";
@@ -2202,8 +2221,6 @@ function avDoAct(name){
   if(name === "attack"){ av.atk = 0.5; av.combatSide = Math.random() < 0.5 ? 1 : -1; return; }
   if(name === "combat"){ av.combat = true; return; }
   if(name === "calm"){ av.combat = false; return; }
-  if(["kick", "kick540", "sidekick", "hook", "uppercut"].includes(name)){ startStrike(name); return; }
-  if(name === "combo"){ av.comboQ = ["hook", "uppercut", "kick"]; startStrike(av.comboQ.shift()); return; }
   if(name === "victory"){ av.pose = {mode: "up", t: 2.5}; avEmote("joy", 2.5); return; }
   if(name === "sit"){ av.sitting = true; av.lying = false; loadPose("Сидит"); return; }
   if(name === "lie"){ av.lying = true; av.prone = false; av.lyingUntil = null; av.sitting = false; loadPose("Лежит"); return; }
@@ -2534,7 +2551,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v79", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v81", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2970,7 +2987,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v79."
-  : "Приветствую, " + uname + ". Я Джарвис v79. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v81."
+  : "Приветствую, " + uname + ". Я Джарвис v81. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
