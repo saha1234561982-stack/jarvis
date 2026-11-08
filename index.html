@@ -1363,7 +1363,21 @@ function libCmd(text){
   if(/^(забудь обо мне|забудь всё|забудь все)$/i.test(x)){ facts = []; sv("jfacts", facts); return "Всё забыла."; }
   if(/^(матерись|можно матерится|включи маты|ругайся)$/i.test(x)){ matMode = true; sv("jmat", true); return "Окей, можно по-дружески ругаться, но тебя не обижу."; }
   if(/^(без матов|не матерись|выключи маты|не ругайся)$/i.test(x)){ matMode = false; sv("jmat", false); return "Хорошо, без матов."; }
-  if(/^редактор (удара|движения)$/i.test(x)){ return openMotionEditor() ? "Редактор открыт. Выбирай часть тела, крути ползунки и жми «Кадр»." : "Сначала выбери модель."; }
+  if(/^редактор (удара|движения|позы)$/i.test(x)){ return openMotionEditor() ? "Редактор открыт. Выбирай часть тела, крути ползунки и жми «Кадр»." : "Сначала выбери модель."; }
+  const ps = x.match(/^поза\s+(.+)$/i);
+  if(ps){
+    if(!av || !av.vrm) return "Сначала выбери модель.";
+    const name = ps[1].trim();
+    const saved = loadMotion(name);
+    const pose = saved && saved.length ? saved[0].p : (DEFAULT_POSES[name] || null);
+    if(!pose) return "Не нашла позу «" + name + "». Скажи «какие позы».";
+    av.playK = null; av.mp = JSON.parse(JSON.stringify(pose)); av.manual = true;
+    return "Ставлю позу «" + name + "». Скажи «встань», чтобы вернуться.";
+  }
+  if(/^какие позы$/i.test(x)){
+    const all = ld("jmotions", {}); const mine = Object.keys(all[avCurName || "_"] || {});
+    return "Встроенные: " + Object.keys(DEFAULT_POSES).join(", ") + ". Твои: " + (mine.length ? mine.join(", ") : "пока нет") + ".";
+  }
   if(/^закрыть редактор$/i.test(x)){ closeMotionEditor(); return "Редактор закрыт."; }
   const pm = x.match(/^проиграй\s+(.+)$/i);
   if(pm){ const k = loadMotion(pm[1].trim()); if(!k) return "Не нашёл такое движение."; playMotion(k); return "Проигрываю «" + pm[1].trim() + "»."; }
@@ -2648,7 +2662,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v85", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v86", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3084,7 +3098,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v85."
-  : "Приветствую, " + uname + ". Я Джарвис v85. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v86."
+  : "Приветствую, " + uname + ". Я Джарвис v86. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
