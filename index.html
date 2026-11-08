@@ -1218,7 +1218,13 @@ function mkBtn(label, fn){
   b.textContent = label; b.onclick = fn;
   return b;
 }
-function openFull(html){ $("fullf").srcdoc = html; $("full").classList.add("on"); }
+function fullFix(html){
+  const css = "<style>html,body{margin:0!important;width:100%!important;height:100%!important;background:#000!important;overflow:hidden!important}canvas{display:block!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important}</style>";
+  const js = "<script>function __fitFull(){document.querySelectorAll('canvas').forEach(function(c){c.width=innerWidth;c.height=innerHeight;});window.dispatchEvent(new Event('resize'));}addEventListener('load',function(){setTimeout(__fitFull,50);});addEventListener('resize',function(){document.querySelectorAll('canvas').forEach(function(c){c.width=innerWidth;c.height=innerHeight;});});<\/script>";
+  const inject = css + js;
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, m => m + inject) : inject + html;
+}
+function openFull(html){ $("fullf").srcdoc = fullFix(html); $("full").classList.add("on"); setTimeout(() => { try{ const w = $("fullf").contentWindow; if(w) w.dispatchEvent(new Event("resize")); }catch(e){} }, 400); }
 $("fullx").onclick = () => { $("full").classList.remove("on"); $("fullf").srcdoc = ""; };
 function saveApp(html){
   const a = document.createElement("a");
@@ -2608,7 +2614,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v83", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v84", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3044,7 +3050,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v83."
-  : "Приветствую, " + uname + ". Я Джарвис v83. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v84."
+  : "Приветствую, " + uname + ". Я Джарвис v84. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
