@@ -275,7 +275,7 @@ $("mClear").onclick = () => { motionKeys = []; motionInfo(); };
 $("mPlay").onclick = () => { if(motionKeys.length) playMotion(motionKeys); };
 $("mSave").onclick = () => { const nm = $("mName").value.trim(); if(!nm || !motionKeys.length){ $("mInfo").textContent = "Нужны кадры и название."; return; } saveMotion(nm, motionKeys); $("mInfo").textContent = "Сохранил «" + nm + "»."; };
 $("mClose").onclick = () => closeMotionEditor();
-function poseNode(name){ return av && av.vrm && av.vrm.humanoid ? av.vrm.humanoid.getRawBoneNode(hbn(name)) : null; }
+function poseNode(name){ return av && av.vrm && av.vrm.humanoid ? av.vrm.humanoid.getNormalizedBoneNode(hbn(name)) : null; }
 function snapshotPose(){
   const mp = {hy: 0, b: {}};
   POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd) mp.b[n] = [nd.rotation.x, nd.rotation.y, nd.rotation.z]; });
@@ -1428,7 +1428,7 @@ function libCmd(text){
   if(/^(инфо о модели|инфо модель|что в модели)$/i.test(x)){
     if(!av || !av.vrm || !av.vrm.humanoid) return "Модель ещё не загружена.";
     const B = BONE_MAP, h = av.vrm.humanoid;
-    const bones = BONE_NAMES.filter(n => h.getRawBoneNode(B[n]));
+    const bones = BONE_NAMES.filter(n => h.getNormalizedBoneNode(B[n]));
     const mats = new Set(), meshes = [], extra = [];
     av.vrm.scene.traverse(o => {
       if(o.isMesh) meshes.push(o.name || "?");
@@ -1733,7 +1733,7 @@ function avLoop(){
   const dt = Math.min((now - av.last) / 1000, 0.1);
   av.last = now; av.t += dt;
   if(av.renderer && (av.rw !== avDiv.clientWidth || av.rh !== avDiv.clientHeight)){ av.rw = avDiv.clientWidth; av.rh = avDiv.clientHeight; avResize(); }
-  if(av.manual){ if(av.playK) stepPlay(dt); manualApply(); av.renderer.render(av.scene, av.cam); av.raf = requestAnimationFrame(avLoop); return; }
+  if(av.manual){ if(av.playK) stepPlay(dt); manualApply(); if(av.vrm) av.vrm.update(dt); av.renderer.render(av.scene, av.cam); av.raf = requestAnimationFrame(avLoop); return; }
   if(av.vrm){
     const bp = av.vrm.expressionManager ? {setValue: (n, v) => av.vrm.expressionManager.setValue(n, v), update: () => av.vrm.expressionManager.update && av.vrm.expressionManager.update()} : null;
     const P = EXPR_MAP;
@@ -1748,7 +1748,7 @@ function avLoop(){
     const level = Math.min(1, rmsOf(typeof outAn !== "undefined" ? outAn : null) * 6);
     const target = level > 0.04 ? level : (speaking ? 0.2 + 0.8 * Math.abs(Math.sin(av.t * 16)) : 0);
     av.mouth += (target - av.mouth) * 0.5;
-    if(!av.head && av.vrm.humanoid){ av.head = av.vrm.humanoid.getRawBoneNode(hbn("Head")) || null; }
+    if(!av.head && av.vrm.humanoid){ av.head = av.vrm.humanoid.getNormalizedBoneNode(hbn("Head")) || null; }
     if(bp){
       bp.setValue(P.Blink, Math.max(0, Math.min(1, b)));
       avEmoApply(bp, P, dt);
@@ -1977,7 +1977,7 @@ function avLoop(){
     av.head.rotation.z = Math.sin(av.t * 0.45) * 0.025 + (av.stumTilt || 0) * 0.6;
   }
   if(av.vrm && av.vrm.humanoid){
-    if(!av.chest) av.chest = av.vrm.humanoid.getRawBoneNode(hbn("Chest")) || av.vrm.humanoid.getRawBoneNode(hbn("Spine")) || false;
+    if(!av.chest) av.chest = av.vrm.humanoid.getNormalizedBoneNode(hbn("Chest")) || av.vrm.humanoid.getNormalizedBoneNode(hbn("Spine")) || false;
     if(av.chest) av.chest.rotation.x = Math.sin(av.t * 1.9) * 0.018 + (av.bowVal || 0) + 0;
     if(av.vrm && av.vrm.humanoid){
       const idle = av.lieK < 0.05 && av.sitK < 0.05;
@@ -1985,7 +1985,7 @@ function avLoop(){
         av.hips.rotation.z += (Math.sin(av.t * 0.5) * 0.025 - av.hips.rotation.z) * 0.1;
         av.hips.rotation.y += (Math.sin(av.t * 0.35) * 0.05 - av.hips.rotation.y) * 0.1;
       }
-      if(av.spineN === undefined) av.spineN = av.vrm.humanoid.getRawBoneNode(hbn("Spine")) || null;
+      if(av.spineN === undefined) av.spineN = av.vrm.humanoid.getNormalizedBoneNode(hbn("Spine")) || null;
       if(av.spineN && idle) av.spineN.rotation.z = Math.sin(av.t * 0.5 + 1) * 0.02;
       if(av.chest){
         if(av.nextFidget === undefined) av.nextFidget = av.t + 6 + Math.random() * 8;
@@ -2135,10 +2135,10 @@ function avPose(vrm){
   try{
     const h = vrm.humanoid; if(!h) return;
     const B = BONE_MAP;
-    const hips = h.getRawBoneNode(B.Hips);
+    const hips = h.getNormalizedBoneNode(B.Hips);
     if(!hips) return;
     const V = () => new THREE.Vector3();
-    const pick = (name) => h.getRawBoneNode(B[name]);
+    const pick = (name) => h.getNormalizedBoneNode(B[name]);
     vrm.scene.updateMatrixWorld(true);
     const hx = hips.getWorldPosition(V()).x;
     av_rig = [];
@@ -2441,7 +2441,7 @@ function avSetupLife(vrm){
     if(/ear/i.test(n) && !/year|near|clear|gear|hear/i.test(n)) av.ears.push({o, base: o.rotation.z});
   });
   const h = vrm.humanoid, B = BONE_MAP;
-  av.legs = h ? [h.getRawBoneNode(B.LeftUpperLeg), h.getRawBoneNode(B.RightUpperLeg)] : [];
+  av.legs = h ? [h.getNormalizedBoneNode(B.LeftUpperLeg), h.getNormalizedBoneNode(B.RightUpperLeg)] : [];
   av.blushMats = [];
   av.pinkC = new THREE.Color(0xff8fb1);
   vrm.scene.traverse(o => {
@@ -2451,11 +2451,11 @@ function avSetupLife(vrm){
       if(col && /face|skin|cheek|blush|kao|hada|肌|顔/i.test(m.name || "")) av.blushMats.push({c: col, base: col.clone()});
     });
   });
-  av.lowLegs = h ? [h.getRawBoneNode(B.LeftLowerLeg), h.getRawBoneNode(B.RightLowerLeg)] : [];
-  av.hips = h ? h.getRawBoneNode(B.Hips) : null;
+  av.lowLegs = h ? [h.getNormalizedBoneNode(B.LeftLowerLeg), h.getNormalizedBoneNode(B.RightLowerLeg)] : [];
+  av.hips = h ? h.getNormalizedBoneNode(B.Hips) : null;
   av.hipsY = av.hips ? av.hips.position.y : 0;
-  av.eyeB = h ? [h.getRawBoneNode(B.LeftEye), h.getRawBoneNode(B.RightEye)].filter(Boolean) : [];
-  av.fingerB = h ? BONE_NAMES.filter(n => /Thumb|Index|Middle|Ring|Little/.test(n)).map(n => ({b: h.getRawBoneNode(B[n]), s: n.startsWith("Left") ? -1 : 1})).filter(f => f.b) : [];
+  av.eyeB = h ? [h.getNormalizedBoneNode(B.LeftEye), h.getNormalizedBoneNode(B.RightEye)].filter(Boolean) : [];
+  av.fingerB = h ? BONE_NAMES.filter(n => /Thumb|Index|Middle|Ring|Little/.test(n)).map(n => ({b: h.getNormalizedBoneNode(B[n]), s: n.startsWith("Left") ? -1 : 1})).filter(f => f.b) : [];
   av.tails = [];
   vrm.scene.traverse(o => { if(o.isBone && /tail|хвост|hair|волос|skirt|юбк/i.test(o.name || "") && !/tailor/i.test(o.name)) av.tails.push(o); });
   av.goal = {x: 0, z: 0}; av.goalRy = 0; av.auto = true; av.nextAct = av.t + 4; av.earT = 0;
@@ -2718,7 +2718,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v93", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v94", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3154,7 +3154,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v93."
-  : "Приветствую, " + uname + ". Я Джарвис v93. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v94."
+  : "Приветствую, " + uname + ". Я Джарвис v94. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
