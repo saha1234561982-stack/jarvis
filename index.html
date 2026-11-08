@@ -93,6 +93,7 @@ body.clean #bar{flex:0 0 auto}
 #posepanel select{width:100%;background:#000;color:#00ff41;border:1px solid #0a4d1a;padding:6px}
 #motionpanel button{width:auto;height:auto;border-radius:8px;padding:6px 10px;font-size:13px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
 #motionpanel select,#motionpanel input{background:#000;color:#00ff41;border:1px solid #0a4d1a;padding:6px}
+html{background:#000}body{background:transparent!important}#chat{background:transparent!important}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -2392,6 +2393,39 @@ function avSetupLife(vrm){
 let avBgRaf = null, avRain = null;
 const BG_THEMES = {"матрица": "matrix", "звезды": "stars", "неон": "neon", "полярное сияние": "aurora", "снег": "snow", "сакура": "sakura"};
 let bgTheme = ld("jbgtheme", "matrix");
+const bgFull = document.createElement("canvas");
+bgFull.id = "bgfull";
+bgFull.style.cssText = "position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:-1;pointer-events:none";
+document.body.insertBefore(bgFull, document.body.firstChild);
+const bgR = {cv: bgFull, ctx: bgFull.getContext("2d"), w: 0, h: 0, fs: 16, cols: [], parts: [], partsTheme: null, last: performance.now()};
+function bgFullSize(){
+  const w = innerWidth, h = innerHeight;
+  if(w === bgR.w && h === bgR.h) return;
+  bgR.w = w; bgR.h = h; bgFull.width = w; bgFull.height = h;
+  bgR.cols = Array.from({length: Math.floor(w / bgR.fs)}, () => ({y: Math.random() * h, v: 40 + Math.random() * 90}));
+  bgR.ctx.fillStyle = "#000"; bgR.ctx.fillRect(0, 0, w, h);
+}
+function drawMatrixFull(r, dt){
+  const c = r.ctx;
+  c.fillStyle = "rgba(0,0,0,0.13)"; c.fillRect(0, 0, r.w, r.h);
+  c.font = r.fs + "px monospace"; c.textAlign = "center";
+  r.cols.forEach((d, i) => {
+    d.y -= d.v * dt;
+    if(d.y < -r.fs){ d.y = r.h + Math.random() * r.h * 0.3; d.v = 40 + Math.random() * 90; }
+    const x = i * r.fs + r.fs / 2;
+    c.fillStyle = "#c8ffd8"; c.fillText(String(Math.floor(Math.random() * 10)), x, d.y);
+    c.fillStyle = "rgba(0,255,65,0.75)"; c.fillText(String(Math.floor(Math.random() * 10)), x, d.y + r.fs);
+  });
+}
+function bgFullLoop(){
+  bgFullSize();
+  const now = performance.now(), dt = Math.min((now - bgR.last) / 1000, 0.05);
+  bgR.last = now;
+  if(bgTheme === "matrix") drawMatrixFull(bgR, dt);
+  else drawTheme(bgR, bgR.ctx, dt, now);
+  requestAnimationFrame(bgFullLoop);
+}
+setTimeout(bgFullLoop, 0);
 function bgThemeName(){ return Object.keys(BG_THEMES).find(k => BG_THEMES[k] === bgTheme) || "матрица"; }
 function drawTheme(r, c, dt, now){
   if(r.partsTheme !== bgTheme){
@@ -2614,7 +2648,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v84", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v85", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3050,7 +3084,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v84."
-  : "Приветствую, " + uname + ". Я Джарвис v84. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v85."
+  : "Приветствую, " + uname + ". Я Джарвис v85. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
