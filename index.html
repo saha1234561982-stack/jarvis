@@ -301,7 +301,7 @@ function syncSliders(){
   const n = $("pbone").value; const v = av.mp.b[n] || [0, 0, 0];
   $("px").value = v[0]; $("py").value = v[1]; $("pz").value = v[2];
 }
-function manualOff(){ if(av) av.manual = false; POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd) nd.rotation.set(0, 0, 0); }); }
+function manualOff(){ if(av) av.manual = false; const rb = (av && av.rest) || {}; POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd){ const v = rb[n] || [0, 0, 0]; nd.rotation.set(v[0], v[1], v[2]); } }); }
 $("pbone").onchange = syncSliders;
 ["x","y","z"].forEach((a, i) => { $("p" + a).oninput = () => { const n = $("pbone").value; if(!av.mp.b[n]) av.mp.b[n] = [0,0,0]; av.mp.b[n][i] = parseFloat($("p" + a).value); }; });
 $("pexp").onclick = () => add("j", JSON.stringify(av.mp));
@@ -2037,6 +2037,7 @@ function avCreditFor(name){
   return /スリクオ|suriku/i.test(name) ? AV_CREDIT : "Модель: " + name;
 }
 async function avLoadBlob(f, name){
+  avCurName = name;
   avMsg("Загружаю модель " + name + "…", true);
   try{
     await avLibs();
@@ -2082,6 +2083,17 @@ async function avLoadBlob(f, name){
     av.box = {size: size.clone(), ctr: ctr.clone(), top};
     avFrame();
     avPose(vrm);
+    (function applyRest(){
+      const k = loadMotion("стойка");
+      const rest = k && k.length ? k[0].p.b : null;
+      if(!rest) return;
+      av.rest = rest;
+      av_rig.forEach((r, i) => {
+        const names = i === 0 ? ["LeftUpperArm", "LeftLowerArm", "LeftHand"] : ["RightUpperArm", "RightLowerArm", "RightHand"];
+        names.forEach(n => { const v = rest[n]; const nd = poseNode(n); if(nd && v) nd.rotation.set(v[0], v[1], v[2]); });
+        if(rest[names[0]]){ r.base = rest[names[0]][2]; r.cur = r.base; }
+      });
+    })();
     avSetupLife(vrm);
     avMsg("", false);
     const cv0 = avDiv.querySelector("canvas");
@@ -2726,7 +2738,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v98", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v99", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3162,7 +3174,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v98."
-  : "Приветствую, " + uname + ". Я Джарвис v98. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v99."
+  : "Приветствую, " + uname + ". Я Джарвис v99. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
