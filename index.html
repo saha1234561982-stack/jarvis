@@ -2057,6 +2057,8 @@ async function avLoadBlob(f, name){
     vrm.scene.scale.setScalar(modelScale[name] || 1);
     if(av.vrm) av.scene.remove(av.vrm.scene);
     av.vrm = vrm; av.scene.add(vrm.scene);
+    vrm.scene.visible = true;
+    vrm.scene.traverse(o => { if(o.isMesh || o.isSkinnedMesh){ o.frustumCulled = false; o.visible = true; } });
     // камера подстраивается под размер модели: верх тела и голова в кадре
     const box = new THREE.Box3().setFromObject(vrm.scene);
     const size = box.getSize(new THREE.Vector3());
@@ -2069,6 +2071,7 @@ async function avLoadBlob(f, name){
     av.cam.position.set(ctr.x, focusY, ctr.z + dist + size.z);
     av.cam.lookAt(ctr.x, focusY, ctr.z);
     av.cam.updateProjectionMatrix();
+    avMsg("Модель: высота " + size.y.toFixed(2) + " м, центр (" + ctr.x.toFixed(2) + ", " + ctr.y.toFixed(2) + ", " + ctr.z.toFixed(2) + "), камера (" + av.cam.position.x.toFixed(2) + ", " + av.cam.position.y.toFixed(2) + ", " + av.cam.position.z.toFixed(2) + ").", true);
     av.box = {size: size.clone(), ctr: ctr.clone(), top};
     avFrame();
     avPose(vrm);
@@ -2714,7 +2717,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v91", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v92", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3150,7 +3153,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v91."
-  : "Приветствую, " + uname + ". Я Джарвис v91. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v92."
+  : "Приветствую, " + uname + ". Я Джарвис v92. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
