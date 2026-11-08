@@ -2059,6 +2059,12 @@ async function avLoadBlob(f, name){
     av.vrm = vrm; av.scene.add(vrm.scene);
     vrm.scene.visible = true;
     vrm.scene.traverse(o => { if(o.isMesh || o.isSkinnedMesh){ o.frustumCulled = false; o.visible = true; } });
+    vrm.scene.traverse(o => {
+      if(!o.isMesh || !o.material) return;
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+        if(m.transparent){ if("transparentWithZWrite" in m) m.transparentWithZWrite = true; if("forceSinglePass" in m) m.forceSinglePass = true; }
+      });
+    });
     // камера подстраивается под размер модели: верх тела и голова в кадре
     const box = new THREE.Box3().setFromObject(vrm.scene);
     const size = box.getSize(new THREE.Vector3());
@@ -2155,7 +2161,7 @@ function avPose(vrm){
       vrm.scene.updateMatrixWorld(true);
       av_rig.push({u, l, base: u.rotation.z, cur: u.rotation.z});
     });
-  }catch(e){}
+  }catch(e){ avMsg("Позы: " + (e && e.message ? e.message : e), true); }
 }
 const AV_EMO = {joy: "Joy", angry: "Angry", sorrow: "Sorrow", fun: "Fun", surprised: "Surprised"};
 let avEmo = {name: null, t: 0};
@@ -2718,7 +2724,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v94", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v95", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3154,7 +3160,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v94."
-  : "Приветствую, " + uname + ". Я Джарвис v94. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v95."
+  : "Приветствую, " + uname + ". Я Джарвис v95. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
