@@ -2145,13 +2145,14 @@ function avPose(vrm){
     [["LeftUpperArm", "LeftLowerArm", "LeftHand"], ["RightUpperArm", "RightLowerArm", "RightHand"]].forEach(([up, low, hand]) => {
       const u = pick(up), l = pick(low), hn = pick(hand);
       if(!u) return;
-      const side = Math.sign(u.getWorldPosition(V()).x - hx) || 1;
-      u.rotation.z = side * 1.15;
-      vrm.scene.updateMatrixWorld(true);
-      if(hn && hn.getWorldPosition(V()).y > u.getWorldPosition(V()).y){
-        u.rotation.z = -side * 1.15;
+      const cands = [1, -1].map(s => {
+        u.rotation.z = s * 1.15;
         vrm.scene.updateMatrixWorld(true);
-      }
+        return {s, y: hn ? hn.getWorldPosition(V()).y : 0};
+      });
+      const best = cands.reduce((a, b) => (b.y < a.y ? b : a));
+      u.rotation.z = best.s * 1.15;
+      vrm.scene.updateMatrixWorld(true);
       av_rig.push({u, l, base: u.rotation.z, cur: u.rotation.z});
     });
   }catch(e){}
@@ -2717,7 +2718,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v92", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v93", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3153,7 +3154,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v92."
-  : "Приветствую, " + uname + ". Я Джарвис v92. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v93."
+  : "Приветствую, " + uname + ". Я Джарвис v93. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
