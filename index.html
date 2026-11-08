@@ -1342,8 +1342,49 @@ function startStrike(type){
   av.strike = {type, t: 0, dur: STRIKE_TIME[type] || 0.5};
   if(type === "kick540") av.strike.dur = 0.9;
 }
+const WEAR_RE = /CLOTH|Tops|Bottoms|Shoes|Onepiece|Accessory|ACC|Item|Harness|Belt|Earring|Ribbon|Coat|Jacket|Skirt|Hat|Cap|Glasses|Scarf|Bow|Tie|Sock|Boot|Heel|Tights|Stocking/i;
+const WEAR_BODY_RE = /Body|SKIN|Face|Hair|Eye|Mouth|Brow|Eyelash|Eyeline|Tooth|Nail/i;
+const ACC_RE = /Accessory|ACC|Item|Harness|Belt|Earring|Ribbon|Hat|Cap|Glasses|Scarf|Bow|Tie/i;
+function wearList(){
+  const out = [];
+  if(!av || !av.vrm) return out;
+  av.vrm.scene.traverse(o => {
+    if(!o.isMesh) return;
+    const mats = (Array.isArray(o.material) ? o.material : [o.material]).map(m => (m && m.name) || "");
+    const names = [o.name || "", ...mats];
+    const hit = names.find(n => WEAR_RE.test(n) && !WEAR_BODY_RE.test(n));
+    if(!hit) return;
+    const label = (o.name && !WEAR_BODY_RE.test(o.name)) ? o.name : hit;
+    const acc = names.some(n => ACC_RE.test(n));
+    out.push({label, mesh: o, acc});
+  });
+  return out;
+}
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(добавь модель|добавить модель|загрузи модель|новая модель)$/i.test(x)){ avFile.click(); return "Выбери одну или несколько моделей (.vrm). Они добавятся в библиотеку."; }
+  const dm = x.match(/^удали модель\s+(.+)$/i);
+  if(dm){
+    const name = avFindName(dm[1].trim());
+    if(!name) return "Не нашла такую модель. Скажи «какие модели».";
+    idbTx("readwrite", st => st.delete(name)).then(() => idbNames()).then(() => add("j", "Удалила модель «" + name + "». В библиотеке: " + avNames.length + "."));
+    return "Удаляю модель «" + name + "»…";
+  }
+  if(/^одежда$/i.test(x)){
+    if(!av || !av.vrm) return "Сначала выбери модель.";
+    const items = wearList();
+    if(!items.length) return "Дополнительной одежды и аксессуаров не нашла.";
+    return "Нашла: " + items.map(i => i.label).join(", ") + ". Аксессуары можно скрыть командой «скрой <название>» и вернуть «покажи <название>».";
+  }
+  const hm = x.match(/^(скрой|покажи)\s+(.+)$/i);
+  if(hm){
+    if(!av || !av.vrm) return "Сначала выбери модель.";
+    const q = hm[2].trim().toLowerCase();
+    const hit = wearList().filter(i => i.acc && i.label.toLowerCase().includes(q));
+    if(!hit.length) return "Не нашла такой аксессуар. Скажи «одежда», чтобы посмотреть список.";
+    hit.forEach(i => { i.mesh.visible = hm[1].toLowerCase() === "покажи"; });
+    return (hm[1].toLowerCase() === "покажи" ? "Показываю " : "Скрываю ") + hit.map(i => i.label).join(", ") + ".";
+  }
   const bgm = x.match(/^фон\s+(.+)$/i);
   if(bgm){
     const key = Object.keys(BG_THEMES).find(k => k === bgm[1].trim().toLowerCase());
@@ -2662,7 +2703,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v86", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v88", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3098,7 +3139,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v86."
-  : "Приветствую, " + uname + ". Я Джарвис v86. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v88."
+  : "Приветствую, " + uname + ". Я Джарвис v88. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
