@@ -2077,7 +2077,7 @@ async function avLoadBlob(f, name){
     av.cam.position.set(ctr.x, focusY, ctr.z + dist + size.z);
     av.cam.lookAt(ctr.x, focusY, ctr.z);
     av.cam.updateProjectionMatrix();
-    avMsg("Модель: высота " + size.y.toFixed(2) + " м, центр (" + ctr.x.toFixed(2) + ", " + ctr.y.toFixed(2) + ", " + ctr.z.toFixed(2) + "), камера (" + av.cam.position.x.toFixed(2) + ", " + av.cam.position.y.toFixed(2) + ", " + av.cam.position.z.toFixed(2) + ").", true);
+    add("j", "Модель: высота " + size.y.toFixed(2) + " м, центр (" + ctr.x.toFixed(2) + ", " + ctr.y.toFixed(2) + ", " + ctr.z.toFixed(2) + "), камера (" + av.cam.position.x.toFixed(2) + ", " + av.cam.position.y.toFixed(2) + ", " + av.cam.position.z.toFixed(2) + ").", true);
     av.box = {size: size.clone(), ctr: ctr.clone(), top};
     avFrame();
     avPose(vrm);
@@ -2161,8 +2161,8 @@ function avPose(vrm){
       vrm.scene.updateMatrixWorld(true);
       av_rig.push({u, l, base: u.rotation.z, cur: u.rotation.z});
     });
-    avMsg("Руки: углы " + av_rig.map(r => r.base.toFixed(2)).join(" и ") + " (" + av_rig.length + " шт.).", true);
-  }catch(e){ avMsg("Позы: " + (e && e.message ? e.message : e), true); }
+    add("j", "Руки: углы " + av_rig.map(r => r.base.toFixed(2)).join(" и ") + " (" + av_rig.length + " шт.).", true);
+  }catch(e){ add("j", "Позы: " + (e && e.message ? e.message : e), true); }
 }
 const AV_EMO = {joy: "Joy", angry: "Angry", sorrow: "Sorrow", fun: "Fun", surprised: "Surprised"};
 let avEmo = {name: null, t: 0};
@@ -2725,7 +2725,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v96", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v97", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3161,7 +3161,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v96."
-  : "Приветствую, " + uname + ". Я Джарвис v96. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v97."
+  : "Приветствую, " + uname + ". Я Джарвис v97. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
