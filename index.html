@@ -1362,6 +1362,18 @@ function wearList(){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(проверка|диагностика)$/i.test(x)){
+    const gl = (() => { try{ const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); }catch(e){ return false; } })();
+    const vrmLib = (typeof avFindVrm === "function" && avFindVrm()) ? "да" : "нет";
+    add("j", "Проверка: three.js " + (typeof THREE !== "undefined" ? "загружен" : "НЕ загружен") +
+      "; загрузчик GLTF " + (typeof THREE !== "undefined" && THREE.GLTFLoader ? "есть" : "НЕТ") +
+      "; библиотека VRM " + vrmLib +
+      "; WebGL " + (gl ? "есть" : "НЕТ") +
+      "; моделей в библиотеке " + avNames.length +
+      "; текущая модель " + (avCurName || "нет") +
+      "; модель в сцене " + (av && av.vrm ? "да" : "нет") + ".");
+    return "Проверяю.";
+  }
   if(/^(добавь модель|добавить модель|загрузи модель|новая модель)$/i.test(x)){ avFile.click(); return "Выбери одну или несколько моделей (.vrm). Они добавятся в библиотеку."; }
   const dm = x.match(/^удали модель\s+(.+)$/i);
   if(dm){
@@ -3161,7 +3173,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v96."
-  : "Приветствую, " + uname + ". Я Джарвис v96. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v96 (диагностика)."
+  : "Приветствую, " + uname + ". Я Джарвис v96 (диагностика). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
