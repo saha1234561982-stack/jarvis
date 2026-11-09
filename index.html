@@ -307,7 +307,7 @@ $("pbone").onchange = syncSliders;
 $("pexp").onclick = () => add("j", JSON.stringify(av.mp));
 $("pauto").onclick = () => manualOff();
 function savePose(name){ const all = ld("jposes", {}); all[avCurName || "_"] = all[avCurName || "_"] || {}; all[avCurName || "_"][name] = JSON.parse(JSON.stringify(av.mp || snapshotPose())); sv("jposes", all); }
-function loadPose(name){ const all = ld("jposes", {}); const p = (all[avCurName || "_"] || {})[name] || DEFAULT_POSES[name]; if(!p) return false; av.mp = JSON.parse(JSON.stringify(p)); av.manual = true; return true; }
+function loadPose(name){ const all = ld("jposes", {}); const ed = loadMotion(name); const p = (ed && ed.length ? ed[0].p : null) || (all[avCurName || "_"] || {})[name] || (av && av.isV0 ? DEFAULT_POSES[name] : null); if(!p) return false; av.mp = JSON.parse(JSON.stringify(p)); av.manual = true; return true; }
 let poseTune = ld("jposetune", {spread: 0, knee: 0, hip: 0, lie: 0});
 let modelScale = ld("jmodelscale", {});
 function savePose(){ sv("jposetune", poseTune); }
@@ -2012,7 +2012,7 @@ function avLoop(){
     (av.fingerB || []).forEach(f => { f.b.rotation.z = av.fist * 1.3 * f.s; });
     if(av.shadow){ av.shadow.position.x = av.vrm.scene.position.x; av.shadow.position.z = av.vrm.scene.position.z; }
   }
-  if(av.vrm && av.vrm.humanoid && av.vrm.humanoid.update) av.vrm.humanoid.update();
+  if(av.vrm && av.vrm.humanoid && av.vrm.humanoid.update && !av.isV0) av.vrm.humanoid.update();
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -2060,6 +2060,12 @@ async function avLoadBlob(f, name){
     if(av.vrm) av.scene.remove(av.vrm.scene);
     av.vrm = vrm; av.scene.add(vrm.scene);
     vrm.scene.visible = true;
+    av.isV0 = !!(vrm.meta && String(vrm.meta.metaVersion) === "0");
+    if(av.isV0 && vrm.humanoid){
+      vrm.humanoid.autoUpdateHumanBones = false;
+      const hh = vrm.humanoid;
+      hh.getNormalizedBoneNode = n => hh.getRawBoneNode(n);
+    }
     vrm.scene.traverse(o => { if(o.isMesh || o.isSkinnedMesh){ o.frustumCulled = false; o.visible = true; } });
     vrm.scene.traverse(o => {
       if(!o.isMesh || !o.material) return;
@@ -2741,7 +2747,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v101", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v103", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3177,7 +3183,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v101."
-  : "Приветствую, " + uname + ". Я Джарвис v101. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v103."
+  : "Приветствую, " + uname + ". Я Джарвис v103. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
