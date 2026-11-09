@@ -2093,6 +2093,9 @@ async function avLoadBlob(f, name){
         names.forEach(n => { const v = rest[n]; const nd = poseNode(n); if(nd && v) nd.rotation.set(v[0], v[1], v[2]); });
         if(rest[names[0]]){ r.base = rest[names[0]][2]; r.cur = r.base; }
       });
+      const L = rest.LeftUpperArm, R = rest.RightUpperArm;
+      const nowL = poseNode("LeftUpperArm"), nowR = poseNode("RightUpperArm");
+      add("j", "Стойка: сохранено левая (x,y,z) " + (L ? L.map(v => v.toFixed(2)).join(", ") : "нет") + "; правая " + (R ? R.map(v => v.toFixed(2)).join(", ") : "нет") + ". Сейчас левая " + (nowL ? [nowL.rotation.x, nowL.rotation.y, nowL.rotation.z].map(v => v.toFixed(2)).join(", ") : "нет") + "; правая " + (nowR ? [nowR.rotation.x, nowR.rotation.y, nowR.rotation.z].map(v => v.toFixed(2)).join(", ") : "нет") + ".");
     })();
     avSetupLife(vrm);
     avMsg("", false);
@@ -2738,7 +2741,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v99", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v100", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3174,7 +3177,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v99."
-  : "Приветствую, " + uname + ". Я Джарвис v99. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v100."
+  : "Приветствую, " + uname + ". Я Джарвис v100. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
