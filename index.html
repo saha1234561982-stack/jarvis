@@ -94,6 +94,10 @@ body.clean #bar{flex:0 0 auto}
 #motionpanel button{width:auto;height:auto;border-radius:8px;padding:6px 10px;font-size:13px;background:#031f09;color:#00ff41;border:1px solid #0a4d1a}
 #motionpanel select,#motionpanel input{background:#000;color:#00ff41;border:1px solid #0a4d1a;padding:6px}
 html{background:#000}body{background:transparent!important}#chat{background:transparent!important}
+body.orb-mode header, body.orb-mode #strow, body.orb-mode #chat, body.orb-mode #bar, body.orb-mode #prev, body.orb-mode #full { display:none !important; }
+body.orb-mode { background:#000 !important; }
+#talkb{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 36px);width:84px;height:84px;border-radius:50%;background:#00ff41;color:#000;border:0;font-size:34px;z-index:6;display:none;box-shadow:0 0 18px rgba(0,255,65,.35);}
+body.orb-mode #talkb{display:block;}
 </style></head><body>
 <header><b>🤖 Джарвис</b>
 <span><label><input type="checkbox" id="v" checked> голос</label>
@@ -1360,8 +1364,70 @@ function wearList(){
   });
   return out;
 }
+(function(){
+  const oc = document.createElement("canvas");
+  oc.id = "orb";
+  oc.style.cssText = "position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:5;display:none;background:#000;pointer-events:none";
+  document.body.appendChild(oc);
+  const tb = document.createElement("button");
+  tb.id = "talkb";
+  tb.textContent = "🎤";
+  document.body.appendChild(tb);
+  const N = 320;
+  const pts = Array.from({length: N}, (_, i) => {
+    const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.399963;
+    return {x: Math.cos(th) * r, y, z: Math.sin(th) * r, s: Math.random()};
+  });
+  const ctx = oc.getContext("2d");
+  function fit(){ oc.width = innerWidth; oc.height = innerHeight; }
+  fit();
+  addEventListener("resize", fit);
+  let orbOn = ld("jorb", true), amp = 0;
+  const t0 = performance.now();
+  function applyMode(){
+    document.body.classList.toggle("orb-mode", orbOn);
+    oc.style.display = orbOn ? "block" : "none";
+    try{ if(avDiv) avDiv.style.display = orbOn ? "none" : ""; }catch(e){}
+    try{ if(bgFull) bgFull.style.display = orbOn ? "none" : ""; }catch(e){}
+  }
+  function frame(now){
+    requestAnimationFrame(frame);
+    if(!orbOn) return;
+    const t = (now - t0) / 1000;
+    const isLive = typeof live !== "undefined" && !!live;
+    const talking = isLive && typeof speaking !== "undefined" && !!speaking;
+    const target = talking ? 1 : (isLive ? 0.55 : 0.2);
+    amp += (target - amp) * 0.08;
+    ctx.clearRect(0, 0, oc.width, oc.height);
+    const cx = oc.width / 2, cy = oc.height / 2;
+    const R = Math.min(oc.width, oc.height) * 0.3 * (1 + amp * 0.06 * Math.sin(t * 4));
+    const ang = t * 0.22, ca = Math.cos(ang), sa = Math.sin(ang);
+    pts.forEach(p => {
+      const x = p.x * ca + p.z * sa, z = -p.x * sa + p.z * ca;
+      const jit = 1 + amp * 0.12 * Math.sin(t * 6 + p.s * 20);
+      const px = cx + x * R * jit, py = cy + p.y * R * jit;
+      const depth = (z + 1) / 2;
+      ctx.fillStyle = "rgba(0,255,65," + (0.25 + depth * 0.75).toFixed(2) + ")";
+      ctx.beginPath();
+      ctx.arc(px, py, 1.2 + depth * 2.2, 0, 6.2832);
+      ctx.fill();
+    });
+  }
+  requestAnimationFrame(frame);
+  tb.onclick = () => { if(live) liveStop(); else liveStart(); };
+  setInterval(() => {
+    const isLive = typeof live !== "undefined" && !!live;
+    tb.style.background = isLive ? "#ff3b3b" : "#00ff41";
+    tb.textContent = isLive ? "⏹" : "🎤";
+  }, 300);
+  window.orbSet = v => { orbOn = v; sv("jorb", v); applyMode(); };
+  setTimeout(applyMode, 0);
+})();
+
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(сфера|режим сферы|минимум)$/i.test(x)){ window.orbSet(true); return "Включила режим сферы. Жми кнопку, чтобы говорить."; }
+  if(/^(обычный вид|полный вид|выключи сферу)$/i.test(x)){ window.orbSet(false); return "Вернула обычный вид."; }
   if(/^(покажи модель|покажи аватар|покажи ее|покажи её)$/i.test(x)){
     if(!av || !av.vrm) return "Модель не загружена. Скажи «модель мита» или обнови страницу.";
     av.auto = true;
@@ -2729,7 +2795,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v110 (VRM 0.x)", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v111 (сфера)", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3165,7 +3231,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v110 (VRM 0.x)."
-  : "Приветствую, " + uname + ". Я Джарвис v110 (VRM 0.x). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v111 (сфера)."
+  : "Приветствую, " + uname + ". Я Джарвис v111 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
