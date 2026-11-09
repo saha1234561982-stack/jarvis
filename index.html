@@ -1377,6 +1377,12 @@ function wearList(){
   cap.style.cssText = "position:fixed;left:8%;right:8%;bottom:calc(env(safe-area-inset-bottom,0px) + 136px);text-align:center;color:#00ff41;font:15px monospace;z-index:6;display:none;pointer-events:none;text-shadow:0 0 6px rgba(0,255,65,.5)";
   document.body.appendChild(cap);
   window.orbCap = t => { cap.textContent = String(t || "").slice(0, 220); cap.style.display = (document.body.classList.contains("orb-mode") && cap.textContent) ? "block" : "none"; };
+  const ver = document.createElement("div");
+  ver.id = "verlab";
+  ver.textContent = "Джарвис v116 · проверка";
+  ver.style.cssText = "position:fixed;left:10px;top:10px;color:#00ff41;font:12px monospace;opacity:.75;z-index:7;display:none;cursor:pointer;padding:4px 6px;border:1px solid rgba(0,255,65,.35);border-radius:6px";
+  ver.onclick = () => { try{ libCmd("проверка"); }catch(e){ window.orbCap && window.orbCap("Ошибка проверки: " + e.message); } };
+  document.body.appendChild(ver);
   tb.id = "talkb";
   tb.textContent = "🎤";
   document.body.appendChild(tb);
@@ -1393,6 +1399,7 @@ function wearList(){
   const t0 = performance.now();
   function applyMode(){
     document.body.classList.toggle("orb-mode", orbOn);
+    const vl = document.getElementById("verlab"); if(vl) vl.style.display = orbOn ? "block" : "none";
     oc.style.display = orbOn ? "block" : "none";
     try{ if(bgFull) bgFull.style.display = orbOn ? "none" : ""; }catch(e){}
   }
@@ -2806,7 +2813,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v115 (сфера)", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v116 (сфера)", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3253,7 +3260,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v115 (сфера)."
-  : "Приветствую, " + uname + ". Я Джарвис v115 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v116 (сфера)."
+  : "Приветствую, " + uname + ". Я Джарвис v116 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
