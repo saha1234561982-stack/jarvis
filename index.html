@@ -148,6 +148,7 @@ let pendingSteps = [];
 let imgModel = null, imgTried = false, lastSrc = [], useStream = true;
 
 function setStatus(t){
+  if(typeof window.orbCap === "function" && document.body.classList.contains("orb-mode")) window.orbCap(t);
   $("st").textContent = t;
   hudState = t.startsWith("🎤") ? "listen" : t.startsWith("📞") ? "live" : t.startsWith("🔊") ? "speak"
     : /^(💭|🧮|🔎|🎨|📷|✍|⌨|🔧)/u.test(t) ? "think" : "idle";
@@ -156,6 +157,7 @@ function subtitle(t){ const s = $("sub"); if(s) s.textContent = t; }
 function idle(){ setStatus(hf ? "🎧 Жду, говори…" : "Готов"); }
 
 function add(cls, text){
+  if(cls === "j" && typeof window.orbCap === "function") window.orbCap(text);
   const d = document.createElement("div");
   d.className = "m " + cls; d.textContent = text;
   $("chat").appendChild(d);
@@ -1370,6 +1372,11 @@ function wearList(){
   oc.style.cssText = "position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:5;display:none;background:#000;pointer-events:none";
   document.body.appendChild(oc);
   const tb = document.createElement("button");
+  const cap = document.createElement("div");
+  cap.id = "orbcap";
+  cap.style.cssText = "position:fixed;left:8%;right:8%;bottom:calc(env(safe-area-inset-bottom,0px) + 136px);text-align:center;color:#00ff41;font:15px monospace;z-index:6;display:none;pointer-events:none;text-shadow:0 0 6px rgba(0,255,65,.5)";
+  document.body.appendChild(cap);
+  window.orbCap = t => { cap.textContent = String(t || "").slice(0, 220); cap.style.display = (document.body.classList.contains("orb-mode") && cap.textContent) ? "block" : "none"; };
   tb.id = "talkb";
   tb.textContent = "🎤";
   document.body.appendChild(tb);
@@ -2795,7 +2802,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v111 (сфера)", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v112 (сфера)", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3231,7 +3238,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v111 (сфера)."
-  : "Приветствую, " + uname + ". Я Джарвис v111 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v112 (сфера)."
+  : "Приветствую, " + uname + ". Я Джарвис v112 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
