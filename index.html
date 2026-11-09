@@ -240,20 +240,6 @@ function openMotionEditor(){
   return true;
 }
 function closeMotionEditor(){ motionPanel.style.display = "none"; if(av) av.playK = null; manualOff(); }
-function sampleKeys(keys, t){
-  const total = keys.reduce((s, k) => s + k.d, 0);
-  if(total <= 0) return keys[0].p;
-  let u = t % total, acc = 0, i = 0;
-  while(i < keys.length - 1 && acc + keys[i].d <= u){ acc += keys[i].d; i++; }
-  const a = keys[i].p, b = keys[(i + 1) % keys.length].p;
-  const f = Math.min(1, (u - acc) / keys[i].d), e = f * f * (3 - 2 * f);
-  const out = {hy: 0, b: {}};
-  new Set([...Object.keys(a.b), ...Object.keys(b.b)]).forEach(n => {
-    const va = a.b[n] || [0, 0, 0], vb = b.b[n] || [0, 0, 0];
-    out.b[n] = [0, 1, 2].map(k => va[k] + (vb[k] - va[k]) * e);
-  });
-  return out;
-}
 function playMotion(keys){
   if(!av || !av.vrm || !keys.length) return;
   av.playK = {keys: JSON.parse(JSON.stringify(keys)), t: 0, total: keys.reduce((s, k) => s + k.d, 0)};
@@ -280,7 +266,7 @@ function stepPlay(dt){
   av.mp = out;
 }
 function saveMotion(name, keys){ const all = ld("jmotions", {}); const k = avCurName || "_"; all[k] = all[k] || {}; all[k][name] = JSON.parse(JSON.stringify(keys)); sv("jmotions", all); }
-function loadMotion(name){ const all = ld("jmotions", {}); const m = all[avCurName || "_"] || {}; const key = Object.keys(m).find(k => k.toLowerCase() === String(name).toLowerCase()); return key ? m[key] : null; }
+function loadMotion(name){ const all = ld("jmotions", {}); return ((all[avCurName || "_"] || {})[name]) || null; }
 $("mBone").onchange = mSync;
 ["x", "y", "z"].forEach((a, i) => { $("m" + a).oninput = () => { const n = $("mBone").value; if(!av.mp.b[n]) av.mp.b[n] = [0, 0, 0]; av.mp.b[n][i] = parseFloat($("m" + a).value); }; });
 $("mKey").onclick = () => { motionKeys.push({d: Math.max(0.05, parseFloat($("mDur").value) || 0.25), p: JSON.parse(JSON.stringify(av.mp))}); motionInfo(); };
@@ -315,13 +301,13 @@ function syncSliders(){
   const n = $("pbone").value; const v = av.mp.b[n] || [0, 0, 0];
   $("px").value = v[0]; $("py").value = v[1]; $("pz").value = v[2];
 }
-function manualOff(){ if(av) av.manual = false; const rb = (av && av.rest) || {}; POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd){ const v = rb[n] || [0, 0, 0]; nd.rotation.set(v[0], v[1], v[2]); } }); }
+function manualOff(){ if(av) av.manual = false; POSE_BONES.forEach(n => { const nd = poseNode(n); if(nd) nd.rotation.set(0, 0, 0); }); }
 $("pbone").onchange = syncSliders;
 ["x","y","z"].forEach((a, i) => { $("p" + a).oninput = () => { const n = $("pbone").value; if(!av.mp.b[n]) av.mp.b[n] = [0,0,0]; av.mp.b[n][i] = parseFloat($("p" + a).value); }; });
 $("pexp").onclick = () => add("j", JSON.stringify(av.mp));
 $("pauto").onclick = () => manualOff();
 function savePose(name){ const all = ld("jposes", {}); all[avCurName || "_"] = all[avCurName || "_"] || {}; all[avCurName || "_"][name] = JSON.parse(JSON.stringify(av.mp || snapshotPose())); sv("jposes", all); }
-function loadPose(name){ const all = ld("jposes", {}); const ed = loadMotion(name); const p = (ed && ed.length ? ed[0].p : null) || (all[avCurName || "_"] || {})[name] || (av && av.isV0 ? DEFAULT_POSES[name] : null); if(!p) return false; av.mp = JSON.parse(JSON.stringify(p)); av.manual = true; return true; }
+function loadPose(name){ const all = ld("jposes", {}); const p = (all[avCurName || "_"] || {})[name] || DEFAULT_POSES[name]; if(!p) return false; av.mp = JSON.parse(JSON.stringify(p)); av.manual = true; return true; }
 let poseTune = ld("jposetune", {spread: 0, knee: 0, hip: 0, lie: 0});
 let modelScale = ld("jmodelscale", {});
 function savePose(){ sv("jposetune", poseTune); }
@@ -1376,15 +1362,6 @@ function wearList(){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
-  if(/^(покажи модель|покажи аватар|покажи ее|покажи её)$/i.test(x)){
-    if(!av || !av.vrm) return "Модель не загружена. Скажи «модель мита» или обнови страницу.";
-    av.auto = true;
-    avFloat(true);
-    avDiv.style.display = "block"; avDiv.style.visibility = "visible"; avDiv.style.opacity = "1";
-    avDiv.style.left = (window.innerWidth - 220) + "px"; avDiv.style.top = (window.innerHeight - 340) + "px";
-    try{ avResize(); }catch(e){}
-    return "Показываю модель в окне.";
-  }
   if(/^(добавь модель|добавить модель|загрузи модель|новая модель)$/i.test(x)){ avFile.click(); return "Выбери одну или несколько моделей (.vrm). Они добавятся в библиотеку."; }
   const dm = x.match(/^удали модель\s+(.+)$/i);
   if(dm){
@@ -1529,7 +1506,7 @@ function libCmd(text){
     return "Чат очищен.";
   }
   if(/^(какие модели|мои модели|список моделей)$/i.test(x)){
-    idbNames().then(ns => add("j", ns.length ? "Модели: " + ns.join(", ") + "." : "Моделей пока нет. Нажми 📂 и выбери все .vrm сразу."));
+    idbNames().then(ns => add("j", ns.length ? "Модели: " + ns.map((n, i) => (i + 1) + ". " + n).join("; ") + "." : "Моделей пока нет. Нажми 📂 и выбери все .vrm сразу."));
     return "Смотрю библиотеку…";
   }
   const sw = x.split(" ").length <= 5
@@ -1881,7 +1858,7 @@ function avLoop(){
     }
     av.lieK = (av.lieK || 0) + ((av.lying ? 1 : 0) - (av.lieK || 0)) * 0.06;
     sc.rotation.x = 0;
-    if(av.hips) av.hips.rotation.x = av.lieK > 0.01 ? (av.prone ? -1.45 : 1.45) * av.lieK * (av.isV0 ? 1 : -1) : 0;
+    if(av.hips) av.hips.rotation.x = av.lieK > 0.01 ? (av.prone ? -1.45 : 1.45) * av.lieK : 0;
     if(av.lieK > 0.01) sc.position.y += ((-0.85 + poseTune.lie) * av.lieK - sc.position.y) * 0.15;
     if(av.lyingUntil && av.t > av.lyingUntil){ av.lying = false; av.lyingUntil = null; }
     if(av.sitUntil && av.t > av.sitUntil){ av.sitting = false; av.sitUntil = null; }
@@ -1984,15 +1961,6 @@ function avLoop(){
         else av.comboQ = null;
       }
     }
-    {
-      const walking = moving && av.sitK < 0.01 && av.lieK < 0.01 && !(av.dance > 0) && !(av.stum > 0) && !av.manual;
-      if(!walking) av.walkKeys = undefined;
-      else if(av.walkKeys === undefined) av.walkKeys = loadMotion("ходьба") || null;
-      if(walking && av.walkKeys && av.walkKeys.length > 1){
-        const wp = sampleKeys(av.walkKeys, av.t * (av.run ? 1.6 : 1));
-        Object.keys(wp.b).forEach(n => { const nd = poseNode(n); if(nd){ const v = wp.b[n]; nd.rotation.set(v[0], v[1], v[2]); } });
-      }
-    }
     if(av.earT > 0) av.earT -= dt;
     if(false && av.auto && !speaking && !live && av.t > av.nextAct){
       const acts = ["wave", "nod", "ears", "left", "right", "back", "front", "turnL", "turnR", "joy", "fun", "surprised", "cute", "stumble", "jump", "bow", "spin", "dance", "lie", "sit", "fall"];
@@ -2044,7 +2012,6 @@ function avLoop(){
     (av.fingerB || []).forEach(f => { f.b.rotation.z = av.fist * 1.3 * f.s; });
     if(av.shadow){ av.shadow.position.x = av.vrm.scene.position.x; av.shadow.position.z = av.vrm.scene.position.z; }
   }
-  if(av.vrm && av.vrm.humanoid && av.vrm.humanoid.update && !av.isV0) av.vrm.humanoid.update();
   av.renderer.render(av.scene, av.cam);
   av.raf = requestAnimationFrame(avLoop);
 }
@@ -2069,7 +2036,6 @@ function avCreditFor(name){
   return /スリクオ|suriku/i.test(name) ? AV_CREDIT : "Модель: " + name;
 }
 async function avLoadBlob(f, name){
-  avCurName = name;
   avMsg("Загружаю модель " + name + "…", true);
   try{
     await avLibs();
@@ -2092,12 +2058,6 @@ async function avLoadBlob(f, name){
     if(av.vrm) av.scene.remove(av.vrm.scene);
     av.vrm = vrm; av.scene.add(vrm.scene);
     vrm.scene.visible = true;
-    av.isV0 = !!(vrm.meta && String(vrm.meta.metaVersion) === "0");
-    if(av.isV0 && vrm.humanoid){
-      vrm.humanoid.autoUpdateHumanBones = false;
-      const hh = vrm.humanoid;
-      hh.getNormalizedBoneNode = n => hh.getRawBoneNode(n);
-    }
     vrm.scene.traverse(o => { if(o.isMesh || o.isSkinnedMesh){ o.frustumCulled = false; o.visible = true; } });
     vrm.scene.traverse(o => {
       if(!o.isMesh || !o.material) return;
@@ -2117,24 +2077,10 @@ async function avLoadBlob(f, name){
     av.cam.position.set(ctr.x, focusY, ctr.z + dist + size.z);
     av.cam.lookAt(ctr.x, focusY, ctr.z);
     av.cam.updateProjectionMatrix();
-    add("j", "Модель: высота " + size.y.toFixed(2) + " м, центр (" + ctr.x.toFixed(2) + ", " + ctr.y.toFixed(2) + ", " + ctr.z.toFixed(2) + "), камера (" + av.cam.position.x.toFixed(2) + ", " + av.cam.position.y.toFixed(2) + ", " + av.cam.position.z.toFixed(2) + ").", true);
+    avMsg("Модель: высота " + size.y.toFixed(2) + " м, центр (" + ctr.x.toFixed(2) + ", " + ctr.y.toFixed(2) + ", " + ctr.z.toFixed(2) + "), камера (" + av.cam.position.x.toFixed(2) + ", " + av.cam.position.y.toFixed(2) + ", " + av.cam.position.z.toFixed(2) + ").", true);
     av.box = {size: size.clone(), ctr: ctr.clone(), top};
     avFrame();
     avPose(vrm);
-    (function applyRest(){
-      const k = loadMotion("стойка");
-      const rest = k && k.length ? k[0].p.b : null;
-      if(!rest) return;
-      av.rest = rest;
-      av_rig.forEach((r, i) => {
-        const names = i === 0 ? ["LeftUpperArm", "LeftLowerArm", "LeftHand"] : ["RightUpperArm", "RightLowerArm", "RightHand"];
-        names.forEach(n => { const v = rest[n]; const nd = poseNode(n); if(nd && v) nd.rotation.set(v[0], v[1], v[2]); });
-        if(rest[names[0]]){ r.base = rest[names[0]][2]; r.cur = r.base; }
-      });
-      const L = rest.LeftUpperArm, R = rest.RightUpperArm;
-      const nowL = poseNode("LeftUpperArm"), nowR = poseNode("RightUpperArm");
-      add("j", "Стойка: сохранено левая (x,y,z) " + (L ? L.map(v => v.toFixed(2)).join(", ") : "нет") + "; правая " + (R ? R.map(v => v.toFixed(2)).join(", ") : "нет") + ". Сейчас левая " + (nowL ? [nowL.rotation.x, nowL.rotation.y, nowL.rotation.z].map(v => v.toFixed(2)).join(", ") : "нет") + "; правая " + (nowR ? [nowR.rotation.x, nowR.rotation.y, nowR.rotation.z].map(v => v.toFixed(2)).join(", ") : "нет") + ".");
-    })();
     avSetupLife(vrm);
     avMsg("", false);
     const cv0 = avDiv.querySelector("canvas");
@@ -2215,8 +2161,8 @@ function avPose(vrm){
       vrm.scene.updateMatrixWorld(true);
       av_rig.push({u, l, base: u.rotation.z, cur: u.rotation.z});
     });
-    add("j", "Руки: углы " + av_rig.map(r => r.base.toFixed(2)).join(" и ") + " (" + av_rig.length + " шт.).", true);
-  }catch(e){ add("j", "Позы: " + (e && e.message ? e.message : e), true); }
+    avMsg("Руки: углы " + av_rig.map(r => r.base.toFixed(2)).join(" и ") + " (" + av_rig.length + " шт.).", true);
+  }catch(e){ avMsg("Позы: " + (e && e.message ? e.message : e), true); }
 }
 const AV_EMO = {joy: "Joy", angry: "Angry", sorrow: "Sorrow", fun: "Fun", surprised: "Surprised"};
 let avEmo = {name: null, t: 0};
@@ -2390,7 +2336,7 @@ function avDoAct(name){
   if(name === "stumble"){ av.stum = 1.2; av.stumDir = Math.random() < 0.5 ? 1 : -1; avEmote("surprised", 1.5); return; }
   if(name === "cute"){ avEmote("cute", 4); return; }
   if(name === "float"){ avFloat(true); return; }
-  if(name === "dock"){ avFloat(true); return; }
+  if(name === "dock"){ avFloat(false); return; }
   if(name === "stop"){ av.auto = false; return; }
   if(name === "free"){ av.auto = true; return; }
   if(name === "joy" || name === "fun" || name === "surprised"){ avEmote(name, 3); }
@@ -2779,7 +2725,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v108", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v96", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3215,7 +3161,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v108."
-  : "Приветствую, " + uname + ". Я Джарвис v108. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v96."
+  : "Приветствую, " + uname + ". Я Джарвис v96. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
