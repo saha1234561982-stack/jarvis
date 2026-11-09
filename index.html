@@ -1448,6 +1448,7 @@ function libCmd(text){
     return "Показываю модель в окне.";
   }
   if(/^(проверка|диагностика)$/i.test(x)){
+    add("j", "Разговор: " + (live ? "включён" : "выключен") + "; отправлено кусков звука: " + (window.liveSent || 0) + "; получено сообщений от модели: " + (window.liveRecv || 0) + ".");
     const gl = (() => { try{ const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); }catch(e){ return false; } })();
     const vrmLib = (typeof avFindVrm === "function" && avFindVrm()) ? "да" : "нет";
     add("j", "Проверка: three.js " + (typeof THREE !== "undefined" ? "загружен" : "НЕ загружен") +
@@ -2805,7 +2806,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v114 (сфера)", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v115 (сфера)", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -2881,6 +2882,7 @@ function connectLive(cands, i){
     ws.send(JSON.stringify({setup}));
   };
   ws.onmessage = async e => {
+    window.liveRecv = (window.liveRecv || 0) + 1;
     let txt = e.data;
     if(typeof txt !== "string"){ try{ txt = await e.data.text(); }catch(x){ return; } }
     let m = null;
@@ -2998,6 +3000,7 @@ function startCapture(){
       const s = Math.max(-1, Math.min(1, sum / Math.max(1, to - from)));
       pcm[i] = s < 0 ? s * 32768 : s * 32767;
     }
+    window.liveSent = (window.liveSent || 0) + 1;
     L.ws.send(JSON.stringify({realtimeInput: {audio: {data: b64(pcm.buffer), mimeType: "audio/pcm;rate=16000"}}}));
   };
   src.connect(proc);
@@ -3250,7 +3253,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v114 (сфера)."
-  : "Приветствую, " + uname + ". Я Джарвис v114 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v115 (сфера)."
+  : "Приветствую, " + uname + ". Я Джарвис v115 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
