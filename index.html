@@ -1379,7 +1379,7 @@ function wearList(){
   window.orbCap = t => { cap.textContent = String(t || "").slice(0, 220); cap.style.display = (document.body.classList.contains("orb-mode") && cap.textContent) ? "block" : "none"; };
   const ver = document.createElement("div");
   ver.id = "verlab";
-  ver.textContent = "Джарвис v116 · проверка";
+  ver.textContent = "Джарвис v117 · проверка";
   ver.style.cssText = "position:fixed;left:10px;top:10px;color:#00ff41;font:12px monospace;opacity:.75;z-index:7;display:none;cursor:pointer;padding:4px 6px;border:1px solid rgba(0,255,65,.35);border-radius:6px";
   ver.onclick = () => { try{ libCmd("проверка"); }catch(e){ window.orbCap && window.orbCap("Ошибка проверки: " + e.message); } };
   document.body.appendChild(ver);
@@ -1427,11 +1427,11 @@ function wearList(){
     });
   }
   requestAnimationFrame(frame);
-  tb.onclick = () => { if(live) liveStop(); else liveStart(); };
+  tb.onclick = () => { const h = document.getElementById("hf"); if(h) h.click(); };
   setInterval(() => {
-    const isLive = typeof live !== "undefined" && !!live;
-    tb.style.background = isLive ? "#ff3b3b" : "#00ff41";
-    tb.textContent = isLive ? "⏹" : "🎤";
+    const on = typeof hf !== "undefined" && !!hf;
+    tb.style.background = on ? "#ff3b3b" : "#00ff41";
+    tb.textContent = on ? "⏹" : "🎤";
   }, 300);
   window.orbSet = v => { orbOn = v; sv("jorb", v); applyMode(); };
   setInterval(() => {
@@ -2813,7 +2813,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v116 (сфера)", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v117 (сфера)", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3260,7 +3260,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v116 (сфера)."
-  : "Приветствую, " + uname + ". Я Джарвис v116 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v117 (сфера)."
+  : "Приветствую, " + uname + ". Я Джарвис v117 (сфера). Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
