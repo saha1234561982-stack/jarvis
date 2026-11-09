@@ -1376,6 +1376,15 @@ function wearList(){
 }
 function libCmd(text){
   const x = text.trim().replace(/[.!?]+$/, "");
+  if(/^(покажи модель|покажи аватар|покажи ее|покажи её)$/i.test(x)){
+    if(!av || !av.vrm) return "Модель не загружена. Скажи «модель мита» или обнови страницу.";
+    av.auto = true;
+    avFloat(true);
+    avDiv.style.display = "block"; avDiv.style.visibility = "visible"; avDiv.style.opacity = "1";
+    avDiv.style.left = (window.innerWidth - 220) + "px"; avDiv.style.top = (window.innerHeight - 340) + "px";
+    try{ avResize(); }catch(e){}
+    return "Показываю модель в окне.";
+  }
   if(/^(добавь модель|добавить модель|загрузи модель|новая модель)$/i.test(x)){ avFile.click(); return "Выбери одну или несколько моделей (.vrm). Они добавятся в библиотеку."; }
   const dm = x.match(/^удали модель\s+(.+)$/i);
   if(dm){
@@ -2770,7 +2779,7 @@ function rmsOf(an){
     // подписи
     g.globalAlpha = 0.9; g.fillStyle = col; g.font = "11px monospace";
     g.textAlign = "left"; g.fillText(new Date().toLocaleTimeString("ru-RU"), 8, 14);
-    g.textAlign = "right"; g.fillText("JARVIS v107", w - 8, 14);
+    g.textAlign = "right"; g.fillText("JARVIS v108", w - 8, 14);
     g.textAlign = "center"; g.fillText(LBL[st] || "", cx, Math.min(h - 6, cy + R * 2.3 + 14));
     g.globalAlpha = 1;
   }
@@ -3206,7 +3215,7 @@ $("vc").onclick = () => {
 
 // ---------- старт ----------
 hist.forEach(h => add(h.role === "user" ? "u" : "j", h.parts[0].text));
-add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v107."
-  : "Приветствую, " + uname + ". Я Джарвис v107. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
+add("j", hist.length ? "С возвращением, " + uname + ". Я Джарвис v108."
+  : "Приветствую, " + uname + ". Я Джарвис v108. Умею считать, искать, рисовать, смотреть фото 📷, запоминать людей, ставить таймеры, вести заметки, писать мини-приложения и говорить вживую 📞.");
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(() => {}); }
 </script></body></html>
